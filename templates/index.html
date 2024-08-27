@@ -280,6 +280,10 @@
                 fileList.innerHTML = '';
                 applyResults.innerHTML = ''; // Clear apply changes results
 
+                acceptAllChangesButton.classList.remove('btn-outline-success');
+                acceptAllChangesButton.classList.add('btn-success');
+                acceptAllChangesButton.innerHTML = '<i class="fas fa-check-double me-2"></i>Accept All Changes';
+                acceptAllChangesButton.disabled = false;
                 let progress = 0;
                 const interval = setInterval(() => {
                     progress += 10;
@@ -291,6 +295,10 @@
                 }, 300);
 
                 acceptedChangesCount = 0;
+                acceptAllChangesButton.classList.remove('btn-outline-success');
+                acceptAllChangesButton.classList.add('btn-success');
+                acceptAllChangesButton.innerHTML = '<i class="fas fa-check-double me-2"></i>Accept All Changes';
+                acceptAllChangesButton.disabled = false;
                 applyAcceptedChangesButton.disabled = true;
                 responseData = null; // Reset responseData
             }
