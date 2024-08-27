@@ -1,0 +1,93 @@
+Please provide code changes in the following JSON format:
+
+Produce a JSON object with the following fields:
+   - "explanation": A concise response to the user's request, maximum 100 words.
+   - "changes": An array of JSON objects, each representing a single change. 
+     It's ok if the changes array is empty, just explain why.
+   - "conclusion": A concise summary / conclusion, maximum 100 words.
+
+Each object in the changes array represents a single change and should have the following structure:
+   {
+     "filename": "path/to/file",
+     "command": "command_type",
+     "reason": "Why this change is happening"
+   }
+The "filename" should be the relative path to the file being modified.
+The "command" optionally has additional fields, which should be included at the same level as the command.
+Example:
+  {
+    "filename": "src/main.rs",
+    "command": "INSERT_BEFORE",
+    "marker_lines": ["fn main() {"],
+    "insert_lines": ["fn main() {", "    println!(\"Hello, world!\");", "}", "fn main() {"],
+    "reason": "Add a new function to the file"
+  }
+
+"command" should be one of the following:
+   - "INSERT_BEFORE": Insert new lines before the specified marker_lines.
+      Additional fields:
+      - "marker_lines": The lines of code to insert before. Use as few lines as possible.
+      - "insert_lines": The lines of code to insert.
+   - "INSERT_AFTER": Insert new lines after the specified marker_lines.
+      Additional fields:
+      - "marker_lines": The lines of code to insert after. Use as few lines as possible. This can never be empty unless it is the end of the file.
+      - "insert_lines": The lines of code to insert.
+   - "DELETE": Code to delete.
+      Additional fields:
+      - "delete_lines": The lines of code to delete.
+   - "CREATE_FILE": Create a new file
+      Additional fields:
+      - "new_lines": The lines of code to insert.
+   - "RENAME_FILE": Rename the file
+      Additional fields:
+      - "new_filename": The new filename.
+   - "DELETE_FILE": Delete the entire file
+
+General points:
+  - Ensure that the JSON is valid and properly formatted.
+
+  - Don't create files that already exist. Either add to an existing file or create a new file.
+
+  - When deleting lines, one command can only cover contiguous lines. Use multiple commands if there are multiple non-contiguous blocks of lines to delete.
+      Example:
+
+        "changes": [
+          {
+            "filename": "index.html",
+            "command": "DELETE",
+            "delete_lines": [
+              "        <a class=\"navbar-brand\" href=\"#\">Coffee Shop</a>"
+            ],
+            "reason": "Remove old coffee shop name references"
+          },
+          {
+            "filename": "index.html",
+            "command": "DELETE",
+            "delete_lines": [
+              "            <h1>Welcome to Our Coffee Shop</h1>"
+            ],
+            "reason": "Remove old coffee shop name references"
+          },
+          {
+            "filename": "index.html",
+            "command": "DELETE",
+            "delete_lines": [
+              "                <p>&copy; 2023 Local Coffee Shop. All rights reserved. <a href=\"terms.html\">Terms and Conditions</a></p>"
+            ],
+            "reason": "Remove old coffee shop name references"
+          }
+        ]
+
+  - When inserting new lines, only insert contiguous blocks of lines. Use multiple commands if there are multiple non-contiguous blocks of lines to insert within a file.
+
+  - To edit existing code, first delete the code old code then insert new code. Deleting first is important.
+
+  - Always include existing lines exactly as they are, including whitespace.
+
+  - Please provide all changes for the current task in this format. No other text outside of the JSON.
+
+  - Rather than deleting all of the lines in a file, delete the file then create the file using CREATE_FILE.
+
+  - Marker lines should be unique within a file, to allow for an exact match. Bad examples: "{", "}", "".
+
+  - Market lines should not duplicate any lines from insert_lines, as this will cause code in the file to have duplicate lines.

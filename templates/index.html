@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>CodePlz - AI-Powered Code Editing</title>
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+        <style>
+            body {
+                background-color: #f8f9fa;
+            }
+
+            .file-item {
+                border-left: 4px solid #007bff;
+                transition: all 0.3s ease-in-out;
+            }
+
+            .file-item:hover {
+                box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            }
+
+            .diff-view {
+                font-family: monospace;
+                white-space: pre;
+                background-color: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 0.25rem;
+                padding: 1rem;
+                margin-top: 1rem;
+            }
+
+            .diff-added {
+                background-color: #e6ffec;
+                color: #24292e;
+            }
+
+            .diff-removed {
+                background-color: #ffebe9;
+                color: #24292e;
+            }
+
+            .diff-context {
+                color: #6a737d;
+                background-color: #f6f8fa;
+            }
+
+            .file-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .token-count {
+                font-size: 0.9rem;
+                color: #6c757d;
+                margin-top: 0.5rem;
+            }
+
+            .server-path {
+                font-size: 1rem;
+                color: #6c757d;
+                margin-top: -1rem;
+                margin-bottom: 2rem;
+            }
+
+            #userRequest {
+                resize: vertical;
+                min-height: 120px;
+                border: 1px solid #ced4da;
+                border-radius: 0.25rem;
+                transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+                width: 100%;
+                padding: 0.75rem;
+                font-size: 1rem;
+                line-height: 1.5;
+            }
+
+            #userRequest:focus {
+                border-color: #86b7fe;
+                outline: 0;
+                box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+            }
+
+            #submitRequest {
+                margin-top: 1rem;
+            }
+
+            @media (max-width: 767.98px) {
+                #submitRequest {
+                    width: 100%;
+                }
+            }
+
+            .action-buttons {
+                display: flex;
+                justify-content: space-between;
+                margin-top: 1rem;
+            }
+
+            .dark-mode {
+                background-color: #333;
+                color: #f8f9fa;
+            }
+
+            .dark-mode .card {
+                background-color: #444;
+                color: #f8f9fa;
+            }
+
+            .dark-mode .diff-view {
+                background-color: #444;
+                border-color: #555;
+            }
+
+            .dark-mode .diff-added {
+                background-color: #1b4721;
+                color: #e6ffec;
+            }
+
+            .dark-mode .diff-removed {
+                background-color: #5c1b1b;
+                color: #ffebe9;
+            }
+
+            .dark-mode .diff-context {
+                color: #8b949e;
+                background-color: #2d333b;
+            }
+
+            .dark-mode .btn-primary {
+                background-color: #4dabf7;
+                border-color: #4dabf7;
+                color: #212529;
+            }
+
+            .dark-mode .btn-primary:hover {
+                background-color: #3793dd;
+                border-color: #3793dd;
+                color: #212529;
+            }
+
+            .dark-mode .btn-primary:focus {
+                box-shadow: 0 0 0 0.25rem rgba(77, 171, 247, 0.5);
+            }
+
+            .dark-mode .card-header.bg-primary {
+                background-color: #4dabf7 !important;
+                color: #212529;
+            }
+
+            #darkModeToggle {
+                position: fixed;
+                top: 1rem;
+                right: 1rem;
+                z-index: 1000;
+            }
+        </style>
+    </head>
+
+    <body class="py-5">
+        <button id="darkModeToggle" class="btn btn-outline-secondary">
+            <i class="fas fa-moon"></i>
+        </button>
+
+        <div class="container">
+            <h1 class="display-4 text-center mb-2">CodePlz</h1>
+            <p class="text-center server-path">
+                <i class="fas fa-folder-open me-2"></i>{{ code_path }}
+                <span class="ms-3"><i class="fas fa-robot me-2"></i>{{ model_name }}</span>
+            </p>
+
+            <div class="card mb-4 shadow-sm">
+                <div class="card-body">
+                    <div id="userRequestSection">
+                        <label for="userRequest" class="form-label">How would you like to change your code?</label>
+                        <textarea id="userRequest" class="form-control mb-3"
+                            placeholder="e.g., Refactor main function for better performance"></textarea>
+                        <div class="d-flex justify-content-end">
+                            <button id="submitRequest" class="btn btn-primary">
+                                <i class="fas fa-arrow-right me-2"></i>Generate Code Changes
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="processingSection" class="mt-4 d-none">
+                        <h6 class="text-primary mb-2">AI is working on your code...</h6>
+                        <div class="progress">
+                            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                                role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="resultsSection" class="card d-none">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">AI-Generated Code Changes</h5>
+                </div>
+                <div class="card-body">
+                    <div id="tokenCount" class="token-count mb-3"></div>
+                    <div id="fileList">
+                        <!-- File items will be dynamically added here -->
+                    </div>
+                    <div class="action-buttons">
+                        <button id="acceptAllChanges" class="btn btn-success">
+                            <i class="fas fa-check-double me-2"></i>Accept All Changes
+                        </button>
+                        <button id="applyAcceptedChanges" class="btn btn-primary" disabled>
+                            <i class="fas fa-sync-alt me-2"></i>Apply Accepted Changes
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <button id="resetButton" class="btn btn-secondary mt-3">
+                <i class="fas fa-undo me-2"></i>Reset
+            </button>
+        </div>
+
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+        <script>
+            const userRequestSection = document.getElementById('userRequestSection');
+            const processingSection = document.getElementById('processingSection');
+            const resultsSection = document.getElementById('resultsSection');
+            const submitButton = document.getElementById('submitRequest');
+            const progressBar = document.getElementById('progressBar');
+            const fileList = document.getElementById('fileList');
+            const acceptAllChangesButton = document.getElementById('acceptAllChanges');
+            const tokenCountElement = document.getElementById('tokenCount');
+            const applyAcceptedChangesButton = document.getElementById('applyAcceptedChanges');
+            const resetButton = document.getElementById('resetButton');
+
+            submitButton.addEventListener('click', startProcessing);
+            acceptAllChangesButton.addEventListener('click', acceptAllChanges);
+            resetButton.addEventListener('click', resetAll);
+            applyAcceptedChangesButton.addEventListener('click', applyAcceptedChanges);
+
+            let acceptedChangesCount = 0;
+
+            function startProcessing() {
+                const userRequest = document.getElementById('userRequest').value;
+
+                processingSection.classList.remove('d-none');
+                resultsSection.classList.add('d-none');
+                fileList.innerHTML = '';
+
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += 10;
+                    progressBar.style.width = `${progress}%`;
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                        sendPromptRequest(userRequest);
+                    }
+                }, 300);
+
+                acceptedChangesCount = 0;
+                applyAcceptedChangesButton.disabled = true;
+            }
+
+            function sendPromptRequest(prompt) {
+                fetch('/prompt', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ prompt: prompt }),
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('Response:', data);
+                        showResults(data);
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred while processing your request.');
+                        processingSection.classList.add('d-none');
+                    });
+            }
+
+            function showResults(responseData) {
+                processingSection.classList.add('d-none');
+                resultsSection.classList.remove('d-none');
+
+                // Display token count (assuming the server provides this information)
+                tokenCountElement.textContent = `Tokens used: ${responseData.token_count || 'N/A'}`;
+
+                // Display explanation
+                const explanationElement = document.createElement('p');
+                explanationElement.textContent = responseData.explanation;
+                fileList.appendChild(explanationElement);
+
+                // Display changes
+                responseData.changes.forEach((change, index) => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item card mb-3';
+
+                    let actionClass, actionText;
+                    switch (change.command) {
+                        case 'INSERT_AFTER':
+                        case 'INSERT_BEFORE':
+                            actionClass = 'text-success';
+                            actionText = 'Insert';
+                            break;
+                        case 'DELETE':
+                            actionClass = 'text-danger';
+                            actionText = 'Delete';
+                            break;
+                        case 'CREATE_FILE':
+                            actionClass = 'text-primary';
+                            actionText = 'Create File';
+                            break;
+                        case 'RENAME_FILE':
+                            actionClass = 'text-warning';
+                            actionText = 'Rename File';
+                            break;
+                        case 'DELETE_FILE':
+                            actionClass = 'text-danger';
+                            actionText = 'Delete File';
+                            break;
+                        default:
+                            actionClass = 'text-info';
+                            actionText = 'Change';
+                    }
+
+                    fileItem.innerHTML = `
+                        <div class="card-body">
+                            <div class="file-header">
+                                <h5 class="card-title">${change.filename}</h5>
+                                <button class="btn btn-outline-success btn-sm accept-change-btn" data-file-index="${index}">
+                                    <i class="fas fa-check me-1"></i>Accept
+                                </button>
+                            </div>
+                            <h6 class="card-subtitle mb-2 ${actionClass}">${actionText}</h6>
+                            <p class="card-text"><strong>Reason:</strong> ${change.reason}</p>
+                            <button class="btn btn-outline-primary btn-sm mt-2 show-diff-btn">Show Changes</button>
+                            <div class="diff-view d-none"></div>
+                        </div>
+                    `;
+
+                    const showDiffBtn = fileItem.querySelector('.show-diff-btn');
+                    const diffView = fileItem.querySelector('.diff-view');
+                    const acceptChangeBtn = fileItem.querySelector('.accept-change-btn');
+
+                    showDiffBtn.addEventListener('click', () => {
+                        if (diffView.classList.contains('d-none')) {
+                            diffView.classList.remove('d-none');
+                            showDiffBtn.textContent = 'Hide Changes';
+
+                            // Use the generated diff from the backend
+                            let formattedDiff = formatDiff(change.diff);
+
+                            diffView.innerHTML = formattedDiff;
+                        } else {
+                            diffView.classList.add('d-none');
+                            showDiffBtn.textContent = 'Show Changes';
+                        }
+                    });
+
+                    acceptChangeBtn.addEventListener('click', (event) => {
+                        toggleAcceptChange(event.target.closest('.accept-change-btn'));
+                    });
+
+                    fileList.appendChild(fileItem);
+                });
+
+                // Display conclusion
+                const conclusionElement = document.createElement('p');
+                conclusionElement.textContent = responseData.conclusion;
+                fileList.appendChild(conclusionElement);
+            }
+
+            function formatDiff(diff) {
+                return diff.split('\n').map(line => {
+                    if (line.startsWith('+')) {
+                        return `<div class="diff-added">${escapeHtml(line)}</div>`;
+                    } else if (line.startsWith('-')) {
+                        return `<div class="diff-removed">${escapeHtml(line)}</div>`;
+                    } else {
+                        return `<div class="diff-context">${escapeHtml(line)}</div>`;
+                    }
+                }).join('');
+            }
+
+            function escapeHtml(unsafe) {
+                return unsafe
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+
+            function toggleAcceptChange(button) {
+                if (button.classList.contains('btn-success')) {
+                    // Unaccept the change
+                    button.classList.remove('btn-success');
+                    button.classList.add('btn-outline-success');
+                    button.innerHTML = '<i class="fas fa-check me-1"></i>Accept';
+                    acceptedChangesCount--;
+                } else {
+                    // Accept the change
+                    button.classList.remove('btn-outline-success');
+                    button.classList.add('btn-success');
+                    button.innerHTML = '<i class="fas fa-check me-1"></i>Accepted';
+                    acceptedChangesCount++;
+                }
+
+                // Update the Apply Accepted Changes button state
+                applyAcceptedChangesButton.disabled = acceptedChangesCount === 0;
+
+                // Update Accept All Changes button state
+                const totalChanges = document.querySelectorAll('.accept-change-btn').length;
+                if (acceptedChangesCount === totalChanges) {
+                    acceptAllChangesButton.classList.remove('btn-success');
+                    acceptAllChangesButton.classList.add('btn-outline-success');
+                    acceptAllChangesButton.innerHTML = '<i class="fas fa-check-double me-2"></i>All Changes Accepted';
+                    acceptAllChangesButton.disabled = true;
+                } else {
+                    acceptAllChangesButton.classList.remove('btn-outline-success');
+                    acceptAllChangesButton.classList.add('btn-success');
+                    acceptAllChangesButton.innerHTML = '<i class="fas fa-check-double me-2"></i>Accept All Changes';
+                    acceptAllChangesButton.disabled = false;
+                }
+            }
+
+            function acceptAllChanges() {
+                document.querySelectorAll('.accept-change-btn').forEach(button => {
+                    if (!button.classList.contains('btn-success')) {
+                        toggleAcceptChange(button);
+                    }
+                });
+            }
+
+            function applyAcceptedChanges() {
+                alert('Changes applied successfully!');
+                applyAcceptedChangesButton.disabled = true;
+                applyAcceptedChangesButton.innerHTML = '<i class="fas fa-check me-2"></i>Changes Applied';
+            }
+
+            function resetAll() {
+                userRequestSection.classList.remove('d-none');
+                processingSection.classList.add('d-none');
+                resultsSection.classList.add('d-none');
+                document.getElementById('userRequest').value = '';
+                fileList.innerHTML = '';
+                acceptAllChangesButton.classList.remove('btn-outline-success');
+                acceptAllChangesButton.classList.add('btn-success');
+                acceptAllChangesButton.innerHTML = '<i class="fas fa-check-double me-2"></i>Accept All Changes';
+                acceptAllChangesButton.disabled = false;
+                applyAcceptedChangesButton.disabled = true;
+                applyAcceptedChangesButton.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Apply Accepted Changes';
+                acceptedChangesCount = 0;
+            }
+
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            darkModeToggle.addEventListener('click', toggleDarkMode);
+
+            function toggleDarkMode() {
+                document.body.classList.toggle('dark-mode');
+                const isDarkMode = document.body.classList.contains('dark-mode');
+                darkModeToggle.innerHTML = isDarkMode ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+
+                // Update button styles
+                if (isDarkMode) {
+                    darkModeToggle.classList.remove('btn-outline-secondary');
+                    darkModeToggle.classList.add('btn-outline-light');
+                    submitButton.classList.remove('btn-primary');
+                    submitButton.classList.add('btn-light');
+                } else {
+                    darkModeToggle.classList.remove('btn-outline-light');
+                    darkModeToggle.classList.add('btn-outline-secondary');
+                    submitButton.classList.remove('btn-light');
+                    submitButton.classList.add('btn-primary');
+                }
+
+                // Save preference to localStorage
+                localStorage.setItem('darkMode', isDarkMode);
+            }
+
+            // Check for saved dark mode preference
+            const savedDarkMode = localStorage.getItem('darkMode');
+            if (savedDarkMode === 'true') {
+                toggleDarkMode();
+            }
+
+            // Add this function to count the lines
+            function countLines(diff, prefix) {
+                return diff.split('\n').filter(line => line.startsWith(prefix)).length;
+            }
+        </script>
+    </body>
+
+</html>
