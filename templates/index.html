@@ -166,6 +166,25 @@
                 right: 1rem;
                 z-index: 1000;
             }
+
+            #apply-results {
+                margin-top: 20px;
+                padding: 10px;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+            }
+
+            .result-item {
+                margin-bottom: 10px;
+            }
+
+            .success {
+                color: green;
+            }
+
+            .failure {
+                color: red;
+            }
         </style>
     </head>
 
@@ -224,6 +243,8 @@
                 </div>
             </div>
 
+            <div id="apply-results"></div>
+
             <button id="resetButton" class="btn btn-secondary mt-3">
                 <i class="fas fa-undo me-2"></i>Reset
             </button>
@@ -241,6 +262,7 @@
             const tokenCountElement = document.getElementById('tokenCount');
             const applyAcceptedChangesButton = document.getElementById('applyAcceptedChanges');
             const resetButton = document.getElementById('resetButton');
+            const applyResults = document.getElementById('apply-results');
 
             submitButton.addEventListener('click', startProcessing);
             acceptAllChangesButton.addEventListener('click', acceptAllChanges);
@@ -464,9 +486,30 @@
             }
 
             function applyAcceptedChanges() {
-                alert('Changes applied successfully!');
-                applyAcceptedChangesButton.disabled = true;
-                applyAcceptedChangesButton.innerHTML = '<i class="fas fa-check me-2"></i>Changes Applied';
+                const changes = getSelectedChanges();
+                if (changes.length > 0) {
+                    fetch('/apply_changes', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ changes: changes })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            let resultsHtml = data.results.map(result => `
+                            <div class="result-item ${result.success ? 'success' : 'failure'}">
+                                <strong>${result.filename}:</strong> ${result.message}
+                            </div>
+                        `).join('');
+                            applyResults.innerHTML = `<h3>Apply Changes Results:</h3>${resultsHtml}`;
+                        })
+                }
+            }
+
+            function getSelectedChanges() {
+                return Array.from(document.querySelectorAll('input[name="change"]:checked'))
+                    .map(input => JSON.parse(input.value));
             }
 
             function resetAll() {
@@ -482,6 +525,7 @@
                 applyAcceptedChangesButton.disabled = true;
                 applyAcceptedChangesButton.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Apply Accepted Changes';
                 acceptedChangesCount = 0;
+                applyResults.innerHTML = '';
             }
 
             const darkModeToggle = document.getElementById('darkModeToggle');

@@ -6,6 +6,7 @@ use std::process::Command;
 use anyhow::{anyhow, bail, Context};
 use askama::Template;
 use axum::extract::State;
+use axum::response::IntoResponse;
 use axum::{
     routing::{get, post},
     Json, Router,
@@ -453,6 +454,7 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/", get(index))
         .route("/prompt", post(prompt))
+        .route("/apply_changes", post(apply_changes))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
@@ -560,11 +562,8 @@ async fn prompt(
         )
     })?;
 
-    // Validate changes
-    let validated_changes = validate_changes(llm_data.changes);
-
     // Generate diffs for each validated change
-    let changes_with_diff = validated_changes
+    let changes_with_diff = validate_changes(llm_data.changes)
         .into_iter()
         .map(|change| {
             let diff =
@@ -573,14 +572,16 @@ async fn prompt(
         })
         .collect::<Vec<ChangeWithDiff>>();
 
-    Ok(Json(PromptResponse {
+    let response = PromptResponse {
         explanation: llm_data.explanation,
         changes: changes_with_diff,
         conclusion: llm_data.conclusion,
         input_token_count,
         output_token_count,
         processed_files,
-    }))
+    };
+
+    Ok(Json(response))
 }
 
 async fn call_openai_gpt4(
@@ -628,8 +629,6 @@ async fn call_openai_gpt4(
             format!("Failed to read response from OpenAI API: {}", e),
         )
     })?;
-
-    dbg!(&response_text);
 
     let openai_response: OpenAIResponse = serde_json::from_str(&response_text).map_err(|e| {
         (
@@ -762,6 +761,118 @@ fn generate_diff(change: &Change) -> anyhow::Result<String> {
             }
 
             Ok(diff_output)
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct ApplyChangesRequest {
+    changes: Vec<Change>,
+}
+
+#[derive(Serialize)]
+struct ApplyChangesResponse {
+    results: Vec<ChangeResult>,
+}
+
+#[derive(Serialize)]
+struct ChangeResult {
+    filename: String,
+    success: bool,
+    message: String,
+}
+
+async fn apply_changes(Json(request): Json<ApplyChangesRequest>) -> impl IntoResponse {
+    let mut results = Vec::new();
+
+    for change in request.changes {
+        let result = apply_change(&change);
+        results.push(result);
+    }
+
+    Json(ApplyChangesResponse { results })
+}
+
+fn apply_change(change: &Change) -> ChangeResult {
+    match &change.command {
+        LLMCommand::CreateFile { new_lines } => {
+            let file_path = Path::new(&change.filename);
+            if let Some(parent) = file_path.parent() {
+                if let Err(e) = fs::create_dir_all(parent) {
+                    return ChangeResult {
+                        filename: change.filename.to_string_lossy().into_owned(),
+                        success: false,
+                        message: format!("Failed to create directory: {}", e),
+                    };
+                }
+            }
+            match fs::write(file_path, new_lines.lines().join("\n")) {
+                Ok(_) => ChangeResult {
+                    filename: change.filename.to_string_lossy().into_owned(),
+                    success: true,
+                    message: format!("Created file and inserted {} lines", new_lines.len()),
+                },
+                Err(e) => ChangeResult {
+                    filename: change.filename.to_string_lossy().into_owned(),
+                    success: false,
+                    message: format!("Failed to create file: {}", e),
+                },
+            }
+        }
+        LLMCommand::RenameFile { new_filename } => {
+            match fs::rename(&change.filename, new_filename) {
+                Ok(_) => ChangeResult {
+                    filename: change.filename.to_string_lossy().into_owned(),
+                    success: true,
+                    message: format!("Renamed file to {}", new_filename.to_string_lossy()),
+                },
+                Err(e) => ChangeResult {
+                    filename: change.filename.to_string_lossy().into_owned(),
+                    success: false,
+                    message: format!("Failed to rename file: {}", e),
+                },
+            }
+        }
+        LLMCommand::DeleteFile => match fs::remove_file(&change.filename) {
+            Ok(_) => ChangeResult {
+                filename: change.filename.to_string_lossy().into_owned(),
+                success: true,
+                message: "Deleted file".to_string(),
+            },
+            Err(e) => ChangeResult {
+                filename: change.filename.to_string_lossy().into_owned(),
+                success: false,
+                message: format!("Failed to delete file: {}", e),
+            },
+        },
+        _ => {
+            let file_path = Path::new(&change.filename);
+            match fs::read_to_string(file_path) {
+                Ok(content) => match apply_change_to_content(&content, change) {
+                    Ok(new_content) => match fs::write(file_path, new_content) {
+                        Ok(_) => ChangeResult {
+                            filename: change.filename.to_string_lossy().into_owned(),
+                            success: true,
+                            message: "Applied changes successfully".to_string(),
+                        },
+                        Err(e) => ChangeResult {
+                            filename: change.filename.to_string_lossy().into_owned(),
+                            success: false,
+                            message: format!("Failed to write changes: {}", e),
+                        },
+                    },
+                    Err(e) => ChangeResult {
+                        filename: change.filename.to_string_lossy().into_owned(),
+                        success: false,
+                        message: format!("Failed to apply changes: {}", e),
+                    },
+                },
+                Err(e) => ChangeResult {
+                    filename: change.filename.to_string_lossy().into_owned(),
+                    success: false,
+                    message: format!("Failed to read file: {}", e),
+                },
+            }
         }
     }
 }
@@ -1048,24 +1159,6 @@ Command output: """
         current_token_count
     );
     Ok((content, processed_files))
-}
-
-fn add_content(
-    content: &mut String,
-    current_token_count: usize,
-    new_content: &str,
-    bpe: &tiktoken_rs::CoreBPE,
-    token_limit: usize,
-) -> anyhow::Result<usize> {
-    let new_token_count = bpe.encode_with_special_tokens(new_content).len();
-
-    if current_token_count + new_token_count > token_limit {
-        return Err(anyhow::anyhow!("Token limit exceeded"));
-    }
-    if new_token_count > 0 {
-        content.push_str(new_content);
-    }
-    Ok(new_token_count)
 }
 
 fn execute_command(cmd: &str) -> anyhow::Result<String> {
