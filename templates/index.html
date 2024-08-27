@@ -278,6 +278,7 @@
                 processingSection.classList.remove('d-none');
                 resultsSection.classList.add('d-none');
                 fileList.innerHTML = '';
+                applyResults.innerHTML = ''; // Clear apply changes results
 
                 let progress = 0;
                 const interval = setInterval(() => {
@@ -341,8 +342,8 @@
 
                 // Display explanation
                 const explanationElement = document.createElement('div');
-                explanationElement.className = 'alert alert-secondary';
-                explanationElement.textContent = responseData.explanation;
+                explanationElement.className = 'alert alert-secondary mb-3';
+                explanationElement.innerHTML = `<h5 class="alert-heading">Explanation:</h5><p>${responseData.explanation}</p>`;
                 fileList.appendChild(explanationElement);
 
                 // Display changes
@@ -419,8 +420,9 @@
                 });
 
                 // Display conclusion
-                const conclusionElement = document.createElement('p');
-                conclusionElement.textContent = responseData.conclusion;
+                const conclusionElement = document.createElement('div');
+                conclusionElement.className = 'alert alert-secondary mt-3';
+                conclusionElement.innerHTML = `<h5 class="alert-heading">Conclusion:</h5><p>${responseData.conclusion}</p>`;
                 fileList.appendChild(conclusionElement);
             }
 
@@ -507,19 +509,31 @@
                         .then(response => response.json())
                         .then(data => {
                             let resultsHtml = data.results.map(result => `
-                            <div class="result-item ${result.success ? 'success' : 'failure'}">
-                                <strong>${result.filename}:</strong> ${result.message}
-                            </div>
-                        `).join('');
-                            applyResults.innerHTML = `<h3>Apply Changes Results:</h3>${resultsHtml}`;
+                                <div class="result-item ${result.success ? 'success' : 'failure'}">
+                                    <strong>${result.filename}:</strong> ${result.message}
+                                </div>
+                            `).join('');
+                            applyResults.innerHTML = `
+                                <div class="alert alert-info">
+                                    <h5 class="alert-heading">Applied Changes:</h5>
+                                    ${resultsHtml}
+                                </div>`;
                         })
                         .catch(error => {
                             console.error('Error:', error);
-                            alert('An error occurred while applying changes.');
+                            applyResults.innerHTML = `
+                                <div class="alert alert-danger">
+                                    <h5 class="alert-heading">Error</h5>
+                                    <p>An error occurred while applying changes.</p>
+                                </div>`;
                         });
                 } else {
                     console.log('No valid changes to apply');
-                    alert('No valid changes to apply.');
+                    applyResults.innerHTML = `
+                        <div class="alert alert-warning">
+                            <h5 class="alert-heading">No Changes Applied</h5>
+                            <p>No valid changes to apply.</p>
+                        </div>`;
                 }
             }
 
