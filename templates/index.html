@@ -291,6 +291,7 @@
 
                 acceptedChangesCount = 0;
                 applyAcceptedChangesButton.disabled = true;
+                responseData = null; // Reset responseData
             }
 
             function sendPromptRequest(prompt) {
@@ -303,7 +304,7 @@
                 })
                     .then(response => response.json())
                     .then(data => {
-                        console.log('Response:', data);
+                        responseData = data; // Set the responseData variable
                         showResults(data);
                     })
                     .catch(error => {
@@ -348,6 +349,8 @@
                 responseData.changes.forEach((changeWithDiff, index) => {
                     const fileItem = document.createElement('div');
                     fileItem.className = 'file-item card mb-3';
+
+                    console.log(changeWithDiff);
 
                     const change = changeWithDiff.change || changeWithDiff; // Handle both structures
                     let actionClass, actionText;
@@ -484,13 +487,16 @@
             }
 
             function applyAcceptedChanges() {
+                console.log(responseData);
                 const changes = Array.from(document.querySelectorAll('.accept-change-btn.btn-success'))
                     .map(button => {
-                        const index = button.getAttribute('data-file-index');
-                        return responseData.changes[index].change;
-                    });
+                        const index = parseInt(button.getAttribute('data-file-index'));
+                        return responseData.changes[index].change || responseData.changes[index];
+                    })
+                    .filter(change => change && change.command); // Filter out null or invalid changes
 
                 if (changes.length > 0) {
+                    console.log('Changes to be applied:', changes);
                     fetch('/apply_changes', {
                         method: 'POST',
                         headers: {
@@ -501,16 +507,19 @@
                         .then(response => response.json())
                         .then(data => {
                             let resultsHtml = data.results.map(result => `
-                                <div class="result-item ${result.success ? 'success' : 'failure'}">
-                                    <strong>${result.filename}:</strong> ${result.message}
-                                </div>
-                            `).join('');
+                            <div class="result-item ${result.success ? 'success' : 'failure'}">
+                                <strong>${result.filename}:</strong> ${result.message}
+                            </div>
+                        `).join('');
                             applyResults.innerHTML = `<h3>Apply Changes Results:</h3>${resultsHtml}`;
                         })
                         .catch(error => {
                             console.error('Error:', error);
                             alert('An error occurred while applying changes.');
                         });
+                } else {
+                    console.log('No valid changes to apply');
+                    alert('No valid changes to apply.');
                 }
             }
 
@@ -528,6 +537,7 @@
                 applyAcceptedChangesButton.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Apply Accepted Changes';
                 acceptedChangesCount = 0;
                 applyResults.innerHTML = '';
+                responseData = null; // Reset responseData
             }
 
             const darkModeToggle = document.getElementById('darkModeToggle');
