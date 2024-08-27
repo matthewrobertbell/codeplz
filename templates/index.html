@@ -270,6 +270,7 @@
             applyAcceptedChangesButton.addEventListener('click', applyAcceptedChanges);
 
             let acceptedChangesCount = 0;
+            let responseData = null;
 
             function startProcessing() {
                 const userRequest = document.getElementById('userRequest').value;
@@ -331,7 +332,7 @@
                 tokenCountElement.innerHTML = `
                     ${processedFilesHtml}
                     <div class="alert alert-info">
-                        <div><strong>Input tokens:</strong> ${responseData.input_token_count} (includes system prompt, context, and user prompt)</div>
+                        <div><strong>Input tokens:</strong> ${responseData.input_token_count}</div>
                         <div><strong>Output tokens:</strong> ${responseData.output_token_count}</div>
                         <div><strong>Total tokens:</strong> ${responseData.input_token_count + responseData.output_token_count}</div>
                     </div>
@@ -344,10 +345,11 @@
                 fileList.appendChild(explanationElement);
 
                 // Display changes
-                responseData.changes.forEach((change, index) => {
+                responseData.changes.forEach((changeWithDiff, index) => {
                     const fileItem = document.createElement('div');
                     fileItem.className = 'file-item card mb-3';
 
+                    const change = changeWithDiff.change || changeWithDiff; // Handle both structures
                     let actionClass, actionText;
                     switch (change.command) {
                         case 'INSERT_AFTER':
@@ -399,11 +401,7 @@
                         if (diffView.classList.contains('d-none')) {
                             diffView.classList.remove('d-none');
                             showDiffBtn.textContent = 'Hide Changes';
-
-                            // Use the generated diff from the backend
-                            let formattedDiff = formatDiff(change.diff);
-
-                            diffView.innerHTML = formattedDiff;
+                            diffView.innerHTML = formatDiff(changeWithDiff.diff);
                         } else {
                             diffView.classList.add('d-none');
                             showDiffBtn.textContent = 'Show Changes';
@@ -411,7 +409,7 @@
                     });
 
                     acceptChangeBtn.addEventListener('click', (event) => {
-                        toggleAcceptChange(event.target.closest('.accept-change-btn'));
+                        toggleAcceptChange(event.target);
                     });
 
                     fileList.appendChild(fileItem);
@@ -486,7 +484,12 @@
             }
 
             function applyAcceptedChanges() {
-                const changes = getSelectedChanges();
+                const changes = Array.from(document.querySelectorAll('.accept-change-btn.btn-success'))
+                    .map(button => {
+                        const index = button.getAttribute('data-file-index');
+                        return responseData.changes[index].change;
+                    });
+
                 if (changes.length > 0) {
                     fetch('/apply_changes', {
                         method: 'POST',
@@ -498,18 +501,17 @@
                         .then(response => response.json())
                         .then(data => {
                             let resultsHtml = data.results.map(result => `
-                            <div class="result-item ${result.success ? 'success' : 'failure'}">
-                                <strong>${result.filename}:</strong> ${result.message}
-                            </div>
-                        `).join('');
+                                <div class="result-item ${result.success ? 'success' : 'failure'}">
+                                    <strong>${result.filename}:</strong> ${result.message}
+                                </div>
+                            `).join('');
                             applyResults.innerHTML = `<h3>Apply Changes Results:</h3>${resultsHtml}`;
                         })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            alert('An error occurred while applying changes.');
+                        });
                 }
-            }
-
-            function getSelectedChanges() {
-                return Array.from(document.querySelectorAll('input[name="change"]:checked'))
-                    .map(input => JSON.parse(input.value));
             }
 
             function resetAll() {

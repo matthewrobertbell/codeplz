@@ -716,7 +716,7 @@ fn generate_diff(change: &Change) -> anyhow::Result<String> {
                 .lines()
                 .into_iter()
                 .map(|line| format!("+{}\n", line))
-                .collect())
+                .fold(String::new(), |acc, line| acc + &line))
         }
         _ => {
             let file_path = &change.filename;
