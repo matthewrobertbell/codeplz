@@ -547,12 +547,11 @@ async fn prompt(
         }
     };
 
-    // Calculate token count (you may want to implement a more accurate method)
-    let token_count = llm_response.len() / 4; // Rough estimate
+    // Validate changes
+    let validated_changes = validate_changes(llm_data.changes);
 
-    // Generate diffs for each change
-    let changes_with_diff = llm_data
-        .changes
+    // Generate diffs for each validated change
+    let changes_with_diff = validated_changes
         .into_iter()
         .map(|change| {
             let diff = generate_diff(&change, &state.config)
@@ -561,12 +560,67 @@ async fn prompt(
         })
         .collect::<Vec<ChangeWithDiff>>();
 
+    // Calculate token count (you may want to implement a more accurate method)
+    let token_count = llm_response.len() / 4; // Rough estimate
+
     Json(PromptResponse {
         explanation: llm_data.explanation,
         changes: changes_with_diff,
         conclusion: llm_data.conclusion,
         token_count,
     })
+}
+
+fn validate_changes(changes: Vec<Change>) -> Vec<Change> {
+    changes
+        .into_iter()
+        .filter_map(|change| match validate_change(&change) {
+            Ok(_) => Some(change),
+            Err(e) => {
+                eprintln!("Failed to validate change: {:?}", e);
+                None
+            }
+        })
+        .collect()
+}
+
+fn validate_change(change: &Change) -> anyhow::Result<()> {
+    match &change.command {
+        LLMCommand::CreateFile { .. } => {
+            // Check if the file already exists
+            if change.filename.exists() {
+                bail!("File already exists: {:?}", change.filename);
+            }
+        }
+        LLMCommand::RenameFile { new_filename } => {
+            // Check if the source file exists and the destination doesn't
+            if !change.filename.exists() {
+                bail!("Source file does not exist: {:?}", change.filename);
+            }
+            if new_filename.exists() {
+                bail!("Destination file already exists: {:?}", new_filename);
+            }
+        }
+        LLMCommand::DeleteFile => {
+            // Check if the file exists
+            if !change.filename.exists() {
+                bail!("File does not exist: {:?}", change.filename);
+            }
+        }
+        LLMCommand::InsertAfter { marker_lines, .. }
+        | LLMCommand::InsertBefore { marker_lines, .. }
+        | LLMCommand::Delete {
+            delete_lines: marker_lines,
+        } => {
+            // Check if the file exists and the marker lines can be found
+            let file_content = std::fs::read_to_string(&change.filename)?;
+            let file_lines: Vec<String> = file_content.lines().map(String::from).collect();
+            if find_in_file_lines(&file_lines, &marker_lines.lines()).is_none() {
+                bail!("Failed to find marker lines in file: {:?}", change.filename);
+            }
+        }
+    }
+    Ok(())
 }
 
 fn generate_diff(change: &Change, config: &Config) -> anyhow::Result<String> {
