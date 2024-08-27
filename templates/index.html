@@ -23,12 +23,22 @@
 
             .diff-view {
                 font-family: monospace;
-                white-space: pre;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                overflow-x: auto;
                 background-color: #f8f9fa;
                 border: 1px solid #e9ecef;
                 border-radius: 0.25rem;
                 padding: 1rem;
                 margin-top: 1rem;
+            }
+
+            .diff-added,
+            .diff-removed,
+            .diff-context {
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                overflow-wrap: break-word;
             }
 
             .diff-added {
@@ -284,11 +294,30 @@
                 processingSection.classList.add('d-none');
                 resultsSection.classList.remove('d-none');
 
-                // Display token count (assuming the server provides this information)
-                tokenCountElement.textContent = `Tokens used: ${responseData.token_count || 'N/A'}`;
+                // Display processed files and their token counts
+                let processedFilesHtml = '<h6>Processed Files:</h6><ul class="list-group mb-3">';
+                responseData.processed_files.forEach(file => {
+                    processedFilesHtml += `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            ${file.name}
+                            <span class="badge bg-primary rounded-pill">${file.token_count} tokens</span>
+                        </li>`;
+                });
+                processedFilesHtml += '</ul>';
+
+                // Display token counts
+                tokenCountElement.innerHTML = `
+                    ${processedFilesHtml}
+                    <div class="alert alert-info">
+                        <div><strong>Input tokens:</strong> ${responseData.input_token_count} (includes system prompt, context, and user prompt)</div>
+                        <div><strong>Output tokens:</strong> ${responseData.output_token_count}</div>
+                        <div><strong>Total tokens:</strong> ${responseData.input_token_count + responseData.output_token_count}</div>
+                    </div>
+                `;
 
                 // Display explanation
-                const explanationElement = document.createElement('p');
+                const explanationElement = document.createElement('div');
+                explanationElement.className = 'alert alert-secondary';
                 explanationElement.textContent = responseData.explanation;
                 fileList.appendChild(explanationElement);
 

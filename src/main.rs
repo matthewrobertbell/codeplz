@@ -4,21 +4,18 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{anyhow, bail, Context};
-use aws_sdk_bedrock::config;
-use axum::extract::State;
-use globset::{Glob, GlobSetBuilder};
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use similar::{ChangeTag, TextDiff};
-use tiktoken_rs::cl100k_base;
-use walkdir::WalkDir;
-
 use askama::Template;
+use axum::extract::State;
 use axum::{
     routing::{get, post},
     Json, Router,
 };
+use globset::{Glob, GlobSetBuilder};
+use reqwest::{Client, StatusCode};
+use serde::{Deserialize, Serialize};
+use similar::{ChangeTag, TextDiff};
+use tiktoken_rs::cl100k_base;
+use walkdir::WalkDir;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 enum LLMModel {
@@ -249,9 +246,6 @@ async fn zzz() -> anyhow::Result<()> {
         match &change.command {
             LLMCommand::CreateFile { new_lines } => {
                 let file_path = Path::new(&change.filename);
-                if file_path.exists() {
-                    bail!("File already exists: {:?}", change.filename);
-                }
                 if let Some(parent) = file_path.parent() {
                     fs::create_dir_all(parent)
                         .with_context(|| format!("✗ Failed to create directory: {:?}", parent))?;
@@ -495,57 +489,76 @@ struct PromptRequest {
     prompt: String,
 }
 
-// Add this new struct
+#[derive(Serialize)]
+struct ProcessedFile {
+    name: String,
+    token_count: usize,
+}
+
 #[derive(Serialize)]
 struct PromptResponse {
     explanation: String,
     changes: Vec<ChangeWithDiff>,
     conclusion: String,
-    token_count: usize,
+    input_token_count: usize,
+    output_token_count: usize,
+    processed_files: Vec<ProcessedFile>,
 }
 
 // Replace the existing prompt function with this new implementation
 async fn prompt(
     State(state): State<AppState>,
     Json(request): Json<PromptRequest>,
-) -> Json<PromptResponse> {
+) -> Result<Json<PromptResponse>, (StatusCode, String)> {
     let config = &state.config;
     let maximum_context_tokens = config
         .maximum_context_tokens
         .unwrap_or_else(|| config.model.max_tokens());
 
-    // Generate context
-    let context = make_context(maximum_context_tokens, config).unwrap_or_else(|e| {
-        eprintln!("Error generating context: {}", e);
-        String::new()
-    });
+    // Get the system prompt
+    let system_prompt = config
+        .system_prompt
+        .clone()
+        .unwrap_or_else(|| include_str!("default_system_prompt.txt").to_string());
 
-    // Combine context and user prompt
-    let full_prompt = format!("{}\n\nUser request: {}", context, request.prompt);
+    // Generate context and track processed files
+    let (context, processed_files) =
+        make_context(maximum_context_tokens, config).unwrap_or_else(|e| {
+            eprintln!("Error generating context: {}", e);
+            (String::new(), Vec::new())
+        });
+
+    // Combine system prompt, context, and user prompt
+    let full_prompt = format!(
+        "{}\n\n{}\n\nUser request: {}",
+        system_prompt, context, request.prompt
+    );
+
+    // Calculate input token count
+    let bpe = cl100k_base().unwrap();
+    let input_token_count = bpe.encode_with_special_tokens(&full_prompt).len();
 
     // Call LLM based on the configured model
     let llm_response = match config.model {
-        LLMModel::OpenAIGPT4o => call_openai_gpt4(&full_prompt).await,
+        LLMModel::OpenAIGPT4o => call_openai_gpt4(&system_prompt, &full_prompt).await?,
         LLMModel::Claude35SonnetBedrock => call_claude_bedrock(&full_prompt).await,
     }
     .replace("```json", "")
     .replace("```", "");
 
+    // Calculate output token count
+    let output_token_count = bpe.encode_with_special_tokens(&llm_response).len();
+
     dbg!(&llm_response);
 
     // Parse LLM response
-    let llm_data: LLMResponse = match serde_json::from_str(&llm_response) {
-        Ok(data) => data,
-        Err(e) => {
-            eprintln!("Error parsing LLM response: {}", e);
-            return Json(PromptResponse {
-                explanation: "Error processing request".to_string(),
-                changes: vec![],
-                conclusion: "An error occurred".to_string(),
-                token_count: 0,
-            });
-        }
-    };
+    let llm_data: LLMResponse = serde_json::from_str(&llm_response).map_err(|e| {
+        eprintln!("Error parsing LLM response: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Error processing request".to_string(),
+        )
+    })?;
 
     // Validate changes
     let validated_changes = validate_changes(llm_data.changes);
@@ -554,21 +567,85 @@ async fn prompt(
     let changes_with_diff = validated_changes
         .into_iter()
         .map(|change| {
-            let diff = generate_diff(&change, &state.config)
-                .unwrap_or_else(|_| String::from("Unable to generate diff"));
+            let diff =
+                generate_diff(&change).unwrap_or_else(|_| String::from("Unable to generate diff"));
             ChangeWithDiff { change, diff }
         })
         .collect::<Vec<ChangeWithDiff>>();
 
-    // Calculate token count (you may want to implement a more accurate method)
-    let token_count = llm_response.len() / 4; // Rough estimate
-
-    Json(PromptResponse {
+    Ok(Json(PromptResponse {
         explanation: llm_data.explanation,
         changes: changes_with_diff,
         conclusion: llm_data.conclusion,
-        token_count,
-    })
+        input_token_count,
+        output_token_count,
+        processed_files,
+    }))
+}
+
+async fn call_openai_gpt4(
+    system_prompt: &str,
+    full_prompt: &str,
+) -> Result<String, (StatusCode, String)> {
+    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "OPENAI_API_KEY environment variable not set".to_string(),
+        )
+    })?;
+
+    let client = Client::new();
+    let request = OpenAIRequest {
+        model: "gpt-4o".to_string(),
+        messages: vec![
+            OpenAIMessage {
+                role: "system".to_string(),
+                content: system_prompt.to_string(),
+            },
+            OpenAIMessage {
+                role: "user".to_string(),
+                content: full_prompt.to_string(),
+            },
+        ],
+    };
+
+    let response = client
+        .post("https://api.openai.com/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .json(&request)
+        .send()
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to send request to OpenAI API: {}", e),
+            )
+        })?;
+
+    let response_text = response.text().await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to read response from OpenAI API: {}", e),
+        )
+    })?;
+
+    dbg!(&response_text);
+
+    let openai_response: OpenAIResponse = serde_json::from_str(&response_text).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to parse OpenAI API response: {}", e),
+        )
+    })?;
+
+    openai_response
+        .choices
+        .first()
+        .map(|choice| choice.message.content.clone())
+        .ok_or((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "No response from OpenAI API".to_string(),
+        ))
 }
 
 fn validate_changes(changes: Vec<Change>) -> Vec<Change> {
@@ -585,20 +662,29 @@ fn validate_changes(changes: Vec<Change>) -> Vec<Change> {
 }
 
 fn validate_change(change: &Change) -> anyhow::Result<()> {
+    // First, check if the file is in the current directory
+    if !is_file_in_current_directory(&change.filename) {
+        bail!(
+            "File is outside the current directory: {:?}",
+            change.filename
+        );
+    }
+
     match &change.command {
         LLMCommand::CreateFile { .. } => {
-            // Check if the file already exists
-            if change.filename.exists() {
-                bail!("File already exists: {:?}", change.filename);
-            }
+            // Remove the check for existing files
         }
         LLMCommand::RenameFile { new_filename } => {
-            // Check if the source file exists and the destination doesn't
+            // Check if the source file exists
             if !change.filename.exists() {
                 bail!("Source file does not exist: {:?}", change.filename);
             }
-            if new_filename.exists() {
-                bail!("Destination file already exists: {:?}", new_filename);
+            // Also check if the new filename is in the current directory
+            if !is_file_in_current_directory(new_filename) {
+                bail!(
+                    "New filename is outside the current directory: {:?}",
+                    new_filename
+                );
             }
         }
         LLMCommand::DeleteFile => {
@@ -623,7 +709,7 @@ fn validate_change(change: &Change) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn generate_diff(change: &Change, config: &Config) -> anyhow::Result<String> {
+fn generate_diff(change: &Change) -> anyhow::Result<String> {
     match &change.command {
         LLMCommand::CreateFile { new_lines } => {
             // For new files, show all lines as added
@@ -640,14 +726,39 @@ fn generate_diff(change: &Change, config: &Config) -> anyhow::Result<String> {
 
             let diff = TextDiff::from_lines(&old_content, &new_content);
             let mut diff_output = String::new();
+            let mut unchanged_lines = Vec::new();
 
             for change in diff.iter_all_changes() {
-                let sign = match change.tag() {
-                    ChangeTag::Delete => "-",
-                    ChangeTag::Insert => "+",
-                    ChangeTag::Equal => " ",
-                };
-                diff_output.push_str(&format!("{}{}", sign, change));
+                match change.tag() {
+                    ChangeTag::Equal => {
+                        unchanged_lines.push(change.to_string());
+                        if unchanged_lines.len() > 10 {
+                            unchanged_lines.remove(0);
+                        }
+                    }
+                    ChangeTag::Delete | ChangeTag::Insert => {
+                        // Output up to 5 unchanged lines before the change
+                        let start = unchanged_lines.len().saturating_sub(5);
+                        for line in &unchanged_lines[start..] {
+                            diff_output.push_str(&format!(" {}", line));
+                        }
+                        unchanged_lines.clear();
+
+                        // Output the changed line
+                        let sign = if change.tag() == ChangeTag::Delete {
+                            "-"
+                        } else {
+                            "+"
+                        };
+                        diff_output.push_str(&format!("{}{}", sign, change));
+                    }
+                }
+            }
+
+            // Output up to 5 unchanged lines after the last change
+            let end = unchanged_lines.len().min(5);
+            for line in &unchanged_lines[..end] {
+                diff_output.push_str(&format!(" {}", line));
             }
 
             Ok(diff_output)
@@ -703,63 +814,40 @@ fn apply_change_to_content(content: &str, change: &Change) -> anyhow::Result<Str
     Ok(new_lines.join("\n"))
 }
 
-async fn call_openai_gpt4(prompt: &str) -> String {
-    let api_key = std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY not set");
-    let client = reqwest::Client::new();
-    let response = client
-        .post("https://api.openai.com/v1/chat/completions")
-        .header("Authorization", format!("Bearer {}", api_key))
-        .json(&json!({
-            "model": "gpt-4",
-            "messages": [
-                {"role": "system", "content": include_str!("default_system_prompt.txt")},
-                {"role": "user", "content": prompt}
-            ]
-        }))
-        .send()
-        .await
-        .expect("Failed to send request to OpenAI API");
-
-    let response_json: serde_json::Value = response
-        .json()
-        .await
-        .expect("Failed to parse OpenAI API response");
-    response_json["choices"][0]["message"]["content"]
-        .as_str()
-        .unwrap_or("")
-        .to_string()
-}
-
 async fn call_claude_bedrock(prompt: &str) -> String {
     /*
     let aws_config = aws_config::load_from_env().await;
     let bedrock_client = aws_sdk_bedrock::Client::new(&aws_config);
 
-    let request = bedrock_client
-        .invoke_model()
-        .model_id("anthropic.claude-v2")
-        .body(
-            json!({
-                "prompt": format!("Human: {}\n\nAssistant:", prompt),
-                "max_tokens_to_sample": 8000,
-                "temperature": 0.5,
-                "top_p": 1,
-            })
-            .to_string(),
-        );
+    let request = aws_sdk_bedrock::model::InvokeModelWithResponseStreamInput {
+        body: prompt.as_bytes().to_vec(),
+        model_id: "anthropic.claude-v2".to_string(),
+        accept: "application/json".to_string(),
+        content_type: "application/json".to_string(),
+        ..Default::default()
+    };
 
-    let response = request.send().await.expect("Failed to call Claude Bedrock");
-    let response_body = response
-        .body()
-        .as_ref()
-        .expect("Empty response from Claude Bedrock");
-    let response_json: serde_json::Value =
-        serde_json::from_slice(response_body).expect("Failed to parse Claude Bedrock response");
-    response_json["completion"]
-        .as_str()
-        .unwrap_or("")
-        .to_string()
-         */
+    let response = bedrock_client
+        .invoke_model_with_response_stream()
+        .model_id("anthropic.claude-v2")
+        .body(request.body)
+        .accept(request.accept)
+        .content_type(request.content_type)
+        .send()
+        .await
+        .expect("Failed to send request to Claude");
+
+    let mut response_body = Vec::new();
+    let mut stream = response.into_body();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.expect("Failed to read chunk from Claude response");
+        response_body.extend_from_slice(&chunk);
+    }
+
+    let response_str =
+        String::from_utf8(response_body).expect("Failed to convert response to UTF-8");
+    response_str
+    */
     "placeholder".to_string()
 }
 
@@ -844,9 +932,13 @@ fn find_in_file_lines(file_lines: &[String], needle: &[String]) -> Option<usize>
     None
 }
 
-fn make_context(maximum_context_tokens: usize, config: &Config) -> anyhow::Result<String> {
+fn make_context(
+    maximum_context_tokens: usize,
+    config: &Config,
+) -> anyhow::Result<(String, Vec<ProcessedFile>)> {
     let mut content = String::new();
     let mut current_token_count = 0;
+    let mut processed_files = Vec::new();
     let bpe = cl100k_base().unwrap();
 
     let mut include_builder = GlobSetBuilder::new();
@@ -907,15 +999,18 @@ File contents: """
 "#,
                 path_str, file_content
             );
-            let new_token_count = add_content(
-                &mut content,
-                current_token_count,
-                &file_context,
-                &bpe,
-                maximum_context_tokens,
-            )?;
-            println!("Processed file: {path_str:<70} - {new_token_count:>6} tokens");
-            current_token_count += new_token_count;
+            let file_token_count = bpe.encode_with_special_tokens(&file_context).len();
+
+            if current_token_count + file_token_count <= maximum_context_tokens {
+                content.push_str(&file_context);
+                current_token_count += file_token_count;
+                processed_files.push(ProcessedFile {
+                    name: path_str.to_string(),
+                    token_count: file_token_count,
+                });
+            } else {
+                break;
+            }
         }
     }
 
@@ -932,15 +1027,18 @@ Command output: """
 "#,
             cmd, output
         );
-        let new_token_count = add_content(
-            &mut content,
-            current_token_count,
-            &command_context,
-            &bpe,
-            maximum_context_tokens,
-        )?;
-        println!("Executed command: {cmd:<67}  - {new_token_count:>6} tokens");
-        current_token_count += new_token_count;
+        let command_token_count = bpe.encode_with_special_tokens(&command_context).len();
+
+        if current_token_count + command_token_count <= maximum_context_tokens {
+            content.push_str(&command_context);
+            current_token_count += command_token_count;
+            processed_files.push(ProcessedFile {
+                name: format!("Command: {}", cmd),
+                token_count: command_token_count,
+            });
+        } else {
+            break;
+        }
     }
 
     let content = content.replace('\n', "\r\n");
@@ -949,7 +1047,7 @@ Command output: """
         "Success loading context! Token count: {}",
         current_token_count
     );
-    Ok(content)
+    Ok((content, processed_files))
 }
 
 fn add_content(
