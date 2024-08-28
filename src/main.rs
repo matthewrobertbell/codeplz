@@ -270,6 +270,16 @@ async fn prompt(
     .replace("```json", "")
     .replace("```", "");
 
+    // Check if the response starts with '{'
+    let llm_response = if !llm_response.trim_start().starts_with('{') {
+        llm_response
+            .split_once('{')
+            .map(|(_, json_part)| format!("{{{}", json_part))
+            .unwrap_or(llm_response)
+    } else {
+        llm_response
+    };
+
     dbg!(&llm_response);
 
     // Calculate output token count
