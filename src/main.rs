@@ -16,12 +16,21 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use clap::Parser;
 use globset::{Glob, GlobSetBuilder};
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, TextDiff};
 use tiktoken_rs::cl100k_base;
 use walkdir::WalkDir;
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Port number to run the server on
+    #[arg(short, long, default_value_t = 3000)]
+    port: u16,
+}
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 enum LLMModel {
@@ -154,6 +163,8 @@ impl AppState {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+
     let config_path = "codeplz.json";
     let config = match std::fs::read_to_string(config_path) {
         Ok(content) => serde_json::from_str::<Config>(&content)?,
@@ -179,8 +190,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/apply_changes", post(apply_changes))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
-    println!("Server running on http://127.0.0.1:3000");
+    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", args.port)).await?;
+    println!("Server running on http://127.0.0.1:{}", args.port);
     axum::serve(listener, app).await?;
 
     Ok(())
