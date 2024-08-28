@@ -18,3 +18,4 @@ axum = "0.7.5"
 askama = "0.12.1"
 askama_axum = "0.4.0"
 similar = "2.2.1"
+clap = { version = "4.0", features = ["derive"] }
