@@ -103,12 +103,13 @@
                 resize: vertical;
                 min-height: 120px;
                 border: 1px solid #ced4da;
-                border-radius: 0.25rem;
+                border-radius: 15px;
                 transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
                 width: 100%;
-                padding: 0.75rem;
+                padding: 1rem;
                 font-size: 1rem;
                 line-height: 1.5;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
             }
 
             #userRequest:focus {
@@ -240,7 +241,6 @@
                 </div>
                 <div class="card-body">
                     <div id="userRequestSection">
-                        <label for="userRequest" class="form-label">How would you like to change your code?</label>
                         <textarea id="userRequest" class="form-control mb-3"
                             placeholder="e.g., Refactor main function for better performance"></textarea>
                         <div class="d-flex justify-content-end">
@@ -313,29 +313,34 @@
             let responseData = null;
 
             function startProcessing() {
-                const userRequest = document.getElementById('userRequest').value;
+                const userRequest = document.getElementById('userRequest').value.trim();
+                if (userRequest) {
+                    processingSection.classList.remove('d-none');
+                    resultsSection.classList.add('d-none');
+                    fileList.innerHTML = '';
+                    applyResults.classList.add('d-none');
+                    applyResultsContent.innerHTML = '';
 
-                processingSection.classList.remove('d-none');
-                resultsSection.classList.add('d-none');
-                fileList.innerHTML = '';
-                applyResults.classList.add('d-none');
-                applyResultsContent.innerHTML = '';
+                    acceptAllChangesButton.classList.remove('btn-outline-success');
+                    acceptAllChangesButton.classList.add('btn-success');
+                    acceptAllChangesButton.innerHTML = '<i class="fas fa-check-double me-2"></i>Accept All Changes';
+                    acceptAllChangesButton.disabled = false;
 
-                acceptAllChangesButton.classList.remove('btn-outline-success');
-                acceptAllChangesButton.classList.add('btn-success');
-                acceptAllChangesButton.innerHTML = '<i class="fas fa-check-double me-2"></i>Accept All Changes';
-                acceptAllChangesButton.disabled = false;
+                    acceptedChangesCount = 0;
+                    applyAcceptedChangesButton.disabled = true;
+                    responseData = null;
 
-                acceptedChangesCount = 0;
-                acceptAllChangesButton.classList.remove('btn-outline-success');
-                acceptAllChangesButton.classList.add('btn-success');
-                acceptAllChangesButton.innerHTML = '<i class="fas fa-check-double me-2"></i>Accept All Changes';
-                acceptAllChangesButton.disabled = false;
-                applyAcceptedChangesButton.disabled = true;
-                responseData = null; // Reset responseData
-
-                sendPromptRequest(userRequest);
+                    sendPromptRequest(userRequest);
+                }
             }
+
+            // Add event listener for Enter key
+            document.getElementById('userRequest').addEventListener('keydown', function (event) {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    startProcessing();
+                }
+            });
 
             function sendPromptRequest(prompt) {
                 fetch('/prompt', {
@@ -347,7 +352,7 @@
                 })
                     .then(response => response.json())
                     .then(data => {
-                        responseData = data; // Set the responseData variable
+                        responseData = data;
                         showResults(data);
                     })
                     .catch(error => {
@@ -394,7 +399,7 @@
 
                     console.log(changeWithDiff);
 
-                    const change = changeWithDiff.change || changeWithDiff; // Handle both structures
+                    const change = changeWithDiff.change || changeWithDiff;
                     let actionClass, actionText;
                     switch (change.command) {
                         case 'INSERT_AFTER':
@@ -536,7 +541,7 @@
                         const index = parseInt(button.getAttribute('data-file-index'));
                         return responseData.changes[index].change || responseData.changes[index];
                     })
-                    .filter(change => change && change.command); // Filter out null or invalid changes
+                    .filter(change => change && change.command);
 
                 if (changes.length > 0) {
                     console.log('Changes to be applied:', changes);
@@ -602,7 +607,7 @@
                 acceptedChangesCount = 0;
                 applyResults.classList.add('d-none');
                 applyResultsContent.innerHTML = '';
-                responseData = null; // Reset responseData
+                responseData = null;
             }
 
             const darkModeToggle = document.getElementById('darkModeToggle');
