@@ -215,10 +215,6 @@
 
                     <div id="processingSection" class="mt-4 d-none">
                         <h6 class="text-primary mb-2">AI is working on your code...</h6>
-                        <div class="progress">
-                            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated"
-                                role="progressbar" style="width: 0%"></div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -256,7 +252,6 @@
             const processingSection = document.getElementById('processingSection');
             const resultsSection = document.getElementById('resultsSection');
             const submitButton = document.getElementById('submitRequest');
-            const progressBar = document.getElementById('progressBar');
             const fileList = document.getElementById('fileList');
             const acceptAllChangesButton = document.getElementById('acceptAllChanges');
             const tokenCountElement = document.getElementById('tokenCount');
@@ -284,15 +279,6 @@
                 acceptAllChangesButton.classList.add('btn-success');
                 acceptAllChangesButton.innerHTML = '<i class="fas fa-check-double me-2"></i>Accept All Changes';
                 acceptAllChangesButton.disabled = false;
-                let progress = 0;
-                const interval = setInterval(() => {
-                    progress += 10;
-                    progressBar.style.width = `${progress}%`;
-                    if (progress >= 100) {
-                        clearInterval(interval);
-                        sendPromptRequest(userRequest);
-                    }
-                }, 300);
 
                 acceptedChangesCount = 0;
                 acceptAllChangesButton.classList.remove('btn-outline-success');
@@ -301,6 +287,8 @@
                 acceptAllChangesButton.disabled = false;
                 applyAcceptedChangesButton.disabled = true;
                 responseData = null; // Reset responseData
+
+                sendPromptRequest(userRequest);
             }
 
             function sendPromptRequest(prompt) {
@@ -344,7 +332,6 @@
                     <div class="alert alert-info">
                         <div><strong>Input tokens:</strong> ${responseData.input_token_count}</div>
                         <div><strong>Output tokens:</strong> ${responseData.output_token_count}</div>
-                        <div><strong>Total tokens:</strong> ${responseData.input_token_count + responseData.output_token_count}</div>
                     </div>
                 `;
 

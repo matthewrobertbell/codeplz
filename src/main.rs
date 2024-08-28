@@ -314,7 +314,7 @@ async fn call_openai_gpt4(
 
     let client = Client::new();
     let request = OpenAIRequest {
-        model: "gpt-4o".to_string(),
+        model: "gpt-4o-2024-08-06".to_string(),
         messages: vec![
             OpenAIMessage {
                 role: "system".to_string(),
