@@ -685,6 +685,9 @@ async fn call_claude_bedrock(
         )
         .send()
         .await
+        .inspect(|v| {
+            dbg!(v);
+        })
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     get_bedrock_converse_output_text(response).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
