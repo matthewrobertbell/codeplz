@@ -688,8 +688,8 @@ async fn call_claude_bedrock(
         )
         .send()
         .await
-        .inspect(|v| {
-            dbg!(v);
+        .inspect_err(|e| {
+            dbg!(e);
         })
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
