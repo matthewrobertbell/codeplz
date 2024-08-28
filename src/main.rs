@@ -659,25 +659,15 @@ async fn call_claude_bedrock(
     let bedrock_client = BedrockClient::new(&aws_config);
     println!("Created Bedrock client");
 
+    let full_prompt = format!("{}\n\n{}", system_prompt, prompt);
+
     let response = bedrock_client
         .converse()
         .model_id("anthropic.claude-3-5-sonnet-20240620-v1:0")
         .messages(
             Message::builder()
                 .role(ConversationRole::User)
-                .content(ContentBlock::Text(system_prompt.to_string()))
-                .build()
-                .map_err(|_| {
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "failed to build message".to_string(),
-                    )
-                })?,
-        )
-        .messages(
-            Message::builder()
-                .role(ConversationRole::User)
-                .content(ContentBlock::Text(prompt.to_string()))
+                .content(ContentBlock::Text(full_prompt))
                 .build()
                 .map_err(|_| {
                     (
