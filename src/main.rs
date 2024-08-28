@@ -5,6 +5,11 @@ use std::process::Command;
 
 use anyhow::{anyhow, bail, Context};
 use askama::Template;
+use aws_sdk_bedrockruntime::{
+    operation::converse::ConverseOutput,
+    types::{ContentBlock, ConversationRole, Message},
+    Client as BedrockClient,
+};
 use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::{
@@ -260,7 +265,9 @@ async fn prompt(
     // Call LLM based on the configured model
     let llm_response = match config.model {
         LLMModel::OpenAIGPT4o => call_openai_gpt4(&system_prompt, &full_prompt).await?,
-        LLMModel::Claude35SonnetBedrock => call_claude_bedrock(&full_prompt).await,
+        LLMModel::Claude35SonnetBedrock => {
+            call_claude_bedrock(&system_prompt, &full_prompt).await?
+        }
     }
     .replace("```json", "")
     .replace("```", "");
@@ -642,41 +649,60 @@ fn apply_change_to_content(content: &str, change: &Change) -> anyhow::Result<Str
     Ok(new_lines.join("\n"))
 }
 
-async fn call_claude_bedrock(prompt: &str) -> String {
-    /*
+async fn call_claude_bedrock(
+    system_prompt: &str,
+    prompt: &str,
+) -> Result<String, (StatusCode, String)> {
     let aws_config = aws_config::load_from_env().await;
-    let bedrock_client = aws_sdk_bedrock::Client::new(&aws_config);
-
-    let request = aws_sdk_bedrock::model::InvokeModelWithResponseStreamInput {
-        body: prompt.as_bytes().to_vec(),
-        model_id: "anthropic.claude-v2".to_string(),
-        accept: "application/json".to_string(),
-        content_type: "application/json".to_string(),
-        ..Default::default()
-    };
+    let bedrock_client = BedrockClient::new(&aws_config);
 
     let response = bedrock_client
-        .invoke_model_with_response_stream()
-        .model_id("anthropic.claude-v2")
-        .body(request.body)
-        .accept(request.accept)
-        .content_type(request.content_type)
+        .converse()
+        .model_id("anthropic.claude-3-5-sonnet-20240620-v1:0")
+        .messages(
+            Message::builder()
+                .role(ConversationRole::User)
+                .content(ContentBlock::Text(system_prompt.to_string()))
+                .build()
+                .map_err(|_| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "failed to build message".to_string(),
+                    )
+                })?,
+        )
+        .messages(
+            Message::builder()
+                .role(ConversationRole::User)
+                .content(ContentBlock::Text(prompt.to_string()))
+                .build()
+                .map_err(|_| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "failed to build message".to_string(),
+                    )
+                })?,
+        )
         .send()
         .await
-        .expect("Failed to send request to Claude");
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let mut response_body = Vec::new();
-    let mut stream = response.into_body();
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.expect("Failed to read chunk from Claude response");
-        response_body.extend_from_slice(&chunk);
-    }
+    get_bedrock_converse_output_text(response).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
 
-    let response_str =
-        String::from_utf8(response_body).expect("Failed to convert response to UTF-8");
-    response_str
-    */
-    "placeholder".to_string()
+fn get_bedrock_converse_output_text(output: ConverseOutput) -> Result<String, String> {
+    let text = output
+        .output()
+        .ok_or("no output".to_string())?
+        .as_message()
+        .map_err(|_| "output not a message".to_string())?
+        .content()
+        .first()
+        .ok_or("no content in message".to_string())?
+        .as_text()
+        .map_err(|_| "content is not text".to_string())?
+        .to_string();
+    Ok(text)
 }
 
 fn is_file_in_current_directory(path: &Path) -> bool {
