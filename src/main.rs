@@ -653,8 +653,11 @@ async fn call_claude_bedrock(
     system_prompt: &str,
     prompt: &str,
 ) -> Result<String, (StatusCode, String)> {
+    println!("Calling Claude Bedrock");
     let aws_config = aws_config::load_from_env().await;
+    println!("Loaded AWS config");
     let bedrock_client = BedrockClient::new(&aws_config);
+    println!("Created Bedrock client");
 
     let response = bedrock_client
         .converse()
