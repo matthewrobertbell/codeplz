@@ -270,6 +270,8 @@ async fn prompt(
     .replace("```json", "")
     .replace("```", "");
 
+    dbg!(&llm_response);
+
     // Calculate output token count
     let output_token_count = bpe.encode_with_special_tokens(&llm_response).len();
 
