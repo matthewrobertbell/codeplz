@@ -197,13 +197,14 @@ async fn index(State(state): State<AppState>) -> IndexTemplate {
     let code_path = std::env::current_dir()
         .map(|path| path.to_string_lossy().into_owned())
         .unwrap_or_else(|_| String::from("Unknown"));
-    let model = match state.config.model {
+    let model_name = match state.config.model {
         LLMModel::OpenAIGPT4o => "OpenAI GPT-4",
         LLMModel::Claude35SonnetBedrock => "Claude 3.5 Sonnet (Bedrock)",
-    };
+    }
+    .to_string();
     IndexTemplate {
         code_path,
-        model_name: model.to_string(),
+        model_name,
     }
 }
 
@@ -253,10 +254,7 @@ async fn prompt(
         });
 
     // Combine system prompt, context, and user prompt
-    let full_prompt = format!(
-        "{}\n\n{}\n\nUser request: {}",
-        system_prompt, context, request.prompt
-    );
+    let full_prompt = format!("n{}\n\nUser request: {}", context, request.prompt);
 
     // Calculate input token count
     let bpe = cl100k_base().unwrap();
@@ -274,8 +272,6 @@ async fn prompt(
 
     // Calculate output token count
     let output_token_count = bpe.encode_with_special_tokens(&llm_response).len();
-
-    dbg!(&llm_response);
 
     // Parse LLM response
     let llm_data: LLMResponse = serde_json::from_str(&llm_response).map_err(|e| {
@@ -353,6 +349,8 @@ async fn call_openai_gpt4(
             format!("Failed to read response from OpenAI API: {}", e),
         )
     })?;
+
+    dbg!(&response_text);
 
     let openai_response: OpenAIResponse = serde_json::from_str(&response_text).map_err(|e| {
         (
