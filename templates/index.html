@@ -9,16 +9,40 @@
         <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
         <style>
             body {
-                background-color: #f8f9fa;
+                background-color: #f0f2f5;
+            }
+
+            .container {
+                max-width: 800px;
+            }
+
+            .card {
+                border: none;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                margin-bottom: 20px;
+            }
+
+            .card-header {
+                background-color: #fff;
+                border-bottom: 1px solid #e0e0e0;
+                padding: 15px 20px;
+            }
+
+            .card-body {
+                padding: 20px;
+            }
+
+            .btn {
+                border-radius: 5px;
             }
 
             .file-item {
-                border-left: 4px solid #007bff;
-                transition: all 0.3s ease-in-out;
+                border-left: none;
             }
 
             .file-item:hover {
-                box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+                box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
             }
 
             .diff-view {
@@ -27,8 +51,8 @@
                 word-wrap: break-word;
                 overflow-x: auto;
                 background-color: #f8f9fa;
-                border: 1px solid #e9ecef;
-                border-radius: 0.25rem;
+                border: none;
+                border-radius: 5px;
                 padding: 1rem;
                 margin-top: 1rem;
             }
@@ -110,18 +134,21 @@
             }
 
             .dark-mode {
-                background-color: #333;
-                color: #f8f9fa;
+                background-color: #1a1a1a;
             }
 
             .dark-mode .card {
-                background-color: #444;
-                color: #f8f9fa;
+                background-color: #2c2c2c;
+                box-shadow: 0 4px 6px rgba(255, 255, 255, 0.1);
+            }
+
+            .dark-mode .card-header {
+                background-color: #2c2c2c;
+                border-bottom: 1px solid #3a3a3a;
             }
 
             .dark-mode .diff-view {
-                background-color: #444;
-                border-color: #555;
+                background-color: #333;
             }
 
             .dark-mode .diff-added {
@@ -165,6 +192,13 @@
                 top: 1rem;
                 right: 1rem;
                 z-index: 1000;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                padding: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
             }
 
             #apply-results {
@@ -194,13 +228,16 @@
         </button>
 
         <div class="container">
-            <h1 class="display-4 text-center mb-2">CodePlz</h1>
-            <p class="text-center server-path">
+            <h1 class="display-4 text-center mb-4">CodePlz</h1>
+            <p class="text-center server-path mb-4">
                 <i class="fas fa-folder-open me-2"></i>{{ code_path }}
                 <span class="ms-3"><i class="fas fa-robot me-2"></i>{{ model_name }}</span>
             </p>
 
-            <div class="card mb-4 shadow-sm">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Code Change Request</h5>
+                </div>
                 <div class="card-body">
                     <div id="userRequestSection">
                         <label for="userRequest" class="form-label">How would you like to change your code?</label>
@@ -220,8 +257,8 @@
             </div>
 
             <div id="resultsSection" class="card d-none">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="card-title mb-0">AI-Generated Code Changes</h5>
+                <div class="card-header">
+                    <h5 class="mb-0">AI-Generated Code Changes</h5>
                 </div>
                 <div class="card-body">
                     <div id="tokenCount" class="token-count mb-3"></div>
@@ -239,7 +276,14 @@
                 </div>
             </div>
 
-            <div id="apply-results"></div>
+            <div id="apply-results" class="card mt-4 d-none">
+                <div class="card-header">
+                    <h5 class="mb-0">Applied Changes</h5>
+                </div>
+                <div class="card-body" id="apply-results-content">
+                    <!-- Results will be dynamically added here -->
+                </div>
+            </div>
 
             <button id="resetButton" class="btn btn-secondary mt-3">
                 <i class="fas fa-undo me-2"></i>Reset
@@ -258,6 +302,7 @@
             const applyAcceptedChangesButton = document.getElementById('applyAcceptedChanges');
             const resetButton = document.getElementById('resetButton');
             const applyResults = document.getElementById('apply-results');
+            const applyResultsContent = document.getElementById('apply-results-content');
 
             submitButton.addEventListener('click', startProcessing);
             acceptAllChangesButton.addEventListener('click', acceptAllChanges);
@@ -273,7 +318,8 @@
                 processingSection.classList.remove('d-none');
                 resultsSection.classList.add('d-none');
                 fileList.innerHTML = '';
-                applyResults.innerHTML = ''; // Clear apply changes results
+                applyResults.classList.add('d-none');
+                applyResultsContent.innerHTML = '';
 
                 acceptAllChangesButton.classList.remove('btn-outline-success');
                 acceptAllChangesButton.classList.add('btn-success');
@@ -504,31 +550,40 @@
                         .then(response => response.json())
                         .then(data => {
                             let resultsHtml = data.results.map(result => `
-                                <div class="result-item ${result.success ? 'success' : 'failure'}">
+                                <div class="alert ${result.success ? 'alert-success' : 'alert-danger'} mb-2">
                                     <strong>${result.filename}:</strong> ${result.message}
                                 </div>
                             `).join('');
-                            applyResults.innerHTML = `
-                                <div class="alert alert-info">
-                                    <h5 class="alert-heading">Applied Changes:</h5>
-                                    ${resultsHtml}
-                                </div>`;
+
+                            const applyResultsContent = document.getElementById('apply-results-content');
+                            applyResultsContent.innerHTML = resultsHtml;
+
+                            const applyResults = document.getElementById('apply-results');
+                            applyResults.classList.remove('d-none');
                         })
                         .catch(error => {
                             console.error('Error:', error);
-                            applyResults.innerHTML = `
+                            const applyResultsContent = document.getElementById('apply-results-content');
+                            applyResultsContent.innerHTML = `
                                 <div class="alert alert-danger">
                                     <h5 class="alert-heading">Error</h5>
                                     <p>An error occurred while applying changes.</p>
                                 </div>`;
+
+                            const applyResults = document.getElementById('apply-results');
+                            applyResults.classList.remove('d-none');
                         });
                 } else {
                     console.log('No valid changes to apply');
-                    applyResults.innerHTML = `
+                    const applyResultsContent = document.getElementById('apply-results-content');
+                    applyResultsContent.innerHTML = `
                         <div class="alert alert-warning">
                             <h5 class="alert-heading">No Changes Applied</h5>
                             <p>No valid changes to apply.</p>
                         </div>`;
+
+                    const applyResults = document.getElementById('apply-results');
+                    applyResults.classList.remove('d-none');
                 }
             }
 
@@ -545,7 +600,8 @@
                 applyAcceptedChangesButton.disabled = true;
                 applyAcceptedChangesButton.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Apply Accepted Changes';
                 acceptedChangesCount = 0;
-                applyResults.innerHTML = '';
+                applyResults.classList.add('d-none');
+                applyResultsContent.innerHTML = '';
                 responseData = null; // Reset responseData
             }
 
