@@ -653,11 +653,8 @@ async fn call_claude_bedrock(
     system_prompt: &str,
     prompt: &str,
 ) -> Result<String, (StatusCode, String)> {
-    println!("Calling Claude Bedrock");
     let aws_config = aws_config::load_from_env().await;
-    println!("Loaded AWS config");
     let bedrock_client = BedrockClient::new(&aws_config);
-    println!("Created Bedrock client");
 
     let full_prompt = format!("{}\n\n{}", system_prompt, prompt);
 
@@ -678,10 +675,9 @@ async fn call_claude_bedrock(
         )
         .send()
         .await
-        .inspect_err(|e| {
-            dbg!(e);
-        })
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    dbg!(&response);
 
     get_bedrock_converse_output_text(response).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
