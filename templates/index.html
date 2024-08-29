@@ -220,6 +220,41 @@
             .failure {
                 color: red;
             }
+
+            .dark-mode .card-header.bg-info {
+                background-color: #0dcaf0 !important;
+                color: #212529;
+            }
+
+            .dark-mode .card-header.bg-success {
+                background-color: #198754 !important;
+                color: #ffffff;
+            }
+
+            .dark-mode .card-body {
+                background-color: #2c2c2c;
+                color: #ffffff;
+            }
+
+            .card-header.bg-neutral-info {
+                background-color: #e9ecef;
+                color: #495057;
+            }
+
+            .card-header.bg-neutral-success {
+                background-color: #f1f8e9;
+                color: #495057;
+            }
+
+            .dark-mode .card-header.bg-neutral-info {
+                background-color: #343a40;
+                color: #e9ecef;
+            }
+
+            .dark-mode .card-header.bg-neutral-success {
+                background-color: #2f3e2f;
+                color: #e9ecef;
+            }
         </style>
     </head>
 
@@ -388,8 +423,15 @@
 
                 // Display explanation
                 const explanationElement = document.createElement('div');
-                explanationElement.className = 'alert alert-secondary mb-3';
-                explanationElement.innerHTML = `<h5 class="alert-heading">Explanation:</h5><p>${responseData.explanation}</p>`;
+                explanationElement.className = 'card mb-4';
+                explanationElement.innerHTML = `
+                    <div class="card-header bg-neutral-info">
+                        <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Explanation</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">${responseData.explanation}</p>
+                    </div>
+                `;
                 fileList.appendChild(explanationElement);
 
                 // Display changes
@@ -467,8 +509,15 @@
 
                 // Display conclusion
                 const conclusionElement = document.createElement('div');
-                conclusionElement.className = 'alert alert-secondary mt-3';
-                conclusionElement.innerHTML = `<h5 class="alert-heading">Conclusion:</h5><p>${responseData.conclusion}</p>`;
+                conclusionElement.className = 'card mt-4';
+                conclusionElement.innerHTML = `
+                    <div class="card-header bg-neutral-success">
+                        <h5 class="mb-0"><i class="fas fa-check-circle me-2"></i>Conclusion</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">${responseData.conclusion}</p>
+                    </div>
+                `;
                 fileList.appendChild(conclusionElement);
             }
 
