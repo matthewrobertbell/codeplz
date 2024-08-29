@@ -326,7 +326,7 @@
                             <i class="fas fa-check-double me-2"></i>Accept All Changes
                         </button>
                         <button id="applyAcceptedChanges" class="btn btn-primary" disabled>
-                            <i class="fas fa-sync-alt me-2"></i>Apply Accepted Changes
+                            <i class="fas fa-arrow-down me-2"></i>Apply Accepted Changes
                         </button>
                     </div>
                 </div>
@@ -642,6 +642,10 @@
 
                             const applyResults = document.getElementById('apply-results');
                             applyResults.classList.remove('d-none');
+
+                            // Update button text and disable it
+                            applyAcceptedChangesButton.innerHTML = '<i class="fas fa-check me-2"></i>Changes Applied';
+                            applyAcceptedChangesButton.disabled = true;
                         })
                         .catch(error => {
                             console.error('Error:', error);
@@ -679,7 +683,7 @@
                 acceptAllChangesButton.innerHTML = '<i class="fas fa-check-double me-2"></i>Accept All Changes';
                 acceptAllChangesButton.disabled = false;
                 applyAcceptedChangesButton.disabled = true;
-                applyAcceptedChangesButton.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Apply Accepted Changes';
+                applyAcceptedChangesButton.innerHTML = '<i class="fas fa-arrow-down me-2"></i>Apply Accepted Changes';
                 acceptedChangesCount = 0;
                 applyResults.classList.add('d-none');
                 applyResultsContent.innerHTML = '';
