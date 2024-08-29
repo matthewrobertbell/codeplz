@@ -205,12 +205,24 @@ async fn main() -> anyhow::Result<()> {
 struct IndexTemplate {
     code_path: String,
     model_name: String,
+    project_name_last: String,
 }
 
 async fn index(State(state): State<AppState>) -> IndexTemplate {
     let code_path = std::env::current_dir()
         .map(|path| path.to_string_lossy().into_owned())
         .unwrap_or_else(|_| String::from("Unknown"));
+    let project_name_last = std::env::current_dir()
+        .map(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str().map(|s| s.to_string()))
+        })
+        .unwrap_or_else(|_| Some(String::from("Unknown")))
+        .unwrap_or_else(|| String::from("Unknown"))
+        .split('/')
+        .last()
+        .unwrap_or("Unknown")
+        .to_string();
     let model_name = match state.config.model {
         LLMModel::OpenAIGPT4o => "OpenAI GPT-4",
         LLMModel::Claude35SonnetBedrock => "Claude 3.5 Sonnet (Bedrock)",
@@ -219,6 +231,7 @@ async fn index(State(state): State<AppState>) -> IndexTemplate {
     IndexTemplate {
         code_path,
         model_name,
+        project_name_last,
     }
 }
 
