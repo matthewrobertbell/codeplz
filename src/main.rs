@@ -287,6 +287,8 @@ async fn select_relevant_files(
         })
         .collect();
 
+    dbg!(&relevant_files);
+
     Ok(relevant_files)
 }
 
