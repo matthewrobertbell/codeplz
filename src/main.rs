@@ -288,6 +288,10 @@ async fn select_relevant_files(
         .collect::<Vec<_>>()
         .join("\n");
 
+    if file_list.is_empty() {
+        return Ok(Vec::new());
+    }
+
     let pre_prompt = format!(
         "Given the following list of files and their token counts, and the user's request, \
         select the most relevant files for completing the task. Return only the file paths, \
