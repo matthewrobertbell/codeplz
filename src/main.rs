@@ -318,7 +318,7 @@ async fn prompt(
         .unwrap_or_else(|| config.model.max_tokens());
 
     // Load all files
-    let (files_and_tokens, _) = load_files(config, maximum_context_tokens).map_err(|e| {
+    let (files_and_tokens, _) = load_files(config, usize::MAX).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to load files: {}", e),
@@ -995,6 +995,10 @@ fn load_files(
         include_builder.add(Glob::new("**/*").unwrap());
     }
 
+    if config.exclude_paths.is_empty() {
+        exclude_builder.add(Glob::new(".git/*").unwrap());
+    }
+
     let include_set = include_builder
         .build()
         .map_err(|e| anyhow!("Failed to build include globset: {}", e))?;
@@ -1029,11 +1033,11 @@ fn load_files(
             let file_context = format!(
                 r#"File name: "{}"
 
-File contents: """
-{}"""
-----------
+        File contents: """
+        {}"""
+        ----------
 
-"#,
+        "#,
                 path_str, file_content
             );
             let file_token_count = bpe.encode_with_special_tokens(&file_context).len();
