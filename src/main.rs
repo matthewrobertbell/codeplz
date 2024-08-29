@@ -244,7 +244,53 @@ struct PromptResponse {
     processed_files: Vec<ProcessedFile>,
 }
 
-// Replace the existing prompt function with this new implementation
+// Add this new function
+async fn select_relevant_files(
+    files_and_tokens: &[(PathBuf, usize)],
+    user_prompt: &str,
+    config: &Config,
+) -> Result<Vec<PathBuf>, (StatusCode, String)> {
+    let file_list = files_and_tokens
+        .iter()
+        .map(|(path, tokens)| format!("{}: {} tokens", path.display(), tokens))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let pre_prompt = format!(
+        "Given the following list of files and their token counts, and the user's request, \
+        select the most relevant files for completing the task. Return only the file paths, \
+        one per line, without any additional text or explanation.\n\n\
+        Files:\n{}\n\nUser request: {}\n\nRelevant files:",
+        file_list, user_prompt
+    );
+
+    let response = match config.model {
+        LLMModel::OpenAIGPT4o => {
+            call_openai_gpt4("You are a helpful assistant.", &pre_prompt).await
+        }
+        LLMModel::Claude35SonnetBedrock => {
+            call_claude_bedrock("You are a helpful assistant.", &pre_prompt).await
+        }
+    }?;
+
+    dbg!(&response);
+
+    let relevant_files = response
+        .lines()
+        .filter_map(|line| {
+            let path = PathBuf::from(line.trim());
+            if files_and_tokens.iter().any(|(p, _)| p == &path) {
+                Some(path)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(relevant_files)
+}
+
+// Modify the prompt function
 async fn prompt(
     State(state): State<AppState>,
     Json(request): Json<PromptRequest>,
@@ -254,21 +300,40 @@ async fn prompt(
         .maximum_context_tokens
         .unwrap_or_else(|| config.model.max_tokens());
 
+    // Load all files
+    let (files_and_tokens, _) = load_files(config, maximum_context_tokens).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to load files: {}", e),
+        )
+    })?;
+
+    // Select relevant files
+    let relevant_files = select_relevant_files(&files_and_tokens, &request.prompt, config).await?;
+
+    // Filter files_and_tokens to include only relevant files
+    let relevant_files_and_tokens: Vec<(PathBuf, usize)> = files_and_tokens
+        .into_iter()
+        .filter(|(path, _)| relevant_files.contains(path))
+        .collect();
+
+    // Generate context using only relevant files
+    let (context, processed_files) =
+        make_context(maximum_context_tokens, config, &relevant_files_and_tokens).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to make context: {}", e),
+            )
+        })?;
+
     // Get the system prompt
     let system_prompt = config
         .system_prompt
         .clone()
         .unwrap_or_else(|| include_str!("default_system_prompt.txt").to_string());
 
-    // Generate context and track processed files
-    let (context, processed_files) =
-        make_context(maximum_context_tokens, config).unwrap_or_else(|e| {
-            eprintln!("Error generating context: {}", e);
-            (String::new(), Vec::new())
-        });
-
     // Combine system prompt, context, and user prompt
-    let full_prompt = format!("n{}\n\nUser request: {}", context, request.prompt);
+    let full_prompt = format!("{}\n\nUser request: {}", context, request.prompt);
 
     // Calculate input token count
     let bpe = cl100k_base().unwrap();
@@ -808,10 +873,92 @@ fn find_in_file_lines(file_lines: &[String], needle: &[String]) -> Option<usize>
 fn make_context(
     maximum_context_tokens: usize,
     config: &Config,
+    files_and_tokens: &[(PathBuf, usize)],
 ) -> anyhow::Result<(String, Vec<ProcessedFile>)> {
     let mut content = String::new();
-    let mut current_token_count = 0;
     let mut processed_files = Vec::new();
+    let mut total_tokens = 0;
+    let bpe = cl100k_base().unwrap();
+
+    for (path, token_count) in files_and_tokens {
+        let file_content = fs::read_to_string(path)?;
+        let path_str = path.to_str().ok_or_else(|| anyhow!("Invalid path"))?;
+        let path_str = path_str.strip_prefix("./").unwrap_or(path_str);
+
+        let file_context = format!(
+            r#"File name: "{}"
+
+File contents: """
+{}"""
+----------
+
+"#,
+            path_str, file_content
+        );
+        content.push_str(&file_context);
+        total_tokens += token_count;
+        processed_files.push(ProcessedFile {
+            name: path_str.to_string(),
+            token_count: *token_count,
+        });
+    }
+
+    // Process commands
+    for cmd in &config.commands {
+        let output = execute_command(cmd)?;
+        let command_context = format!(
+            r#"Command: "{}"
+
+Command output: """
+{}"""
+----------
+
+"#,
+            cmd, output
+        );
+        let command_token_count = bpe.encode_with_special_tokens(&command_context).len();
+
+        if total_tokens + command_token_count <= maximum_context_tokens {
+            content.push_str(&command_context);
+            total_tokens += command_token_count;
+            processed_files.push(ProcessedFile {
+                name: format!("Command: {}", cmd),
+                token_count: command_token_count,
+            });
+        } else {
+            break;
+        }
+    }
+
+    let content = content.replace('\n', "\r\n");
+
+    println!("Success loading context! Token count: {}", total_tokens);
+    Ok((content, processed_files))
+}
+
+fn execute_command(cmd: &str) -> anyhow::Result<String> {
+    let output = Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .with_context(|| format!("Failed to execute command: {}", cmd))?;
+
+    let exit_status = output.status.code().unwrap_or(-1);
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+
+    Ok(format!(
+        "Exit Status: {}\n\nSTDOUT:\n{}\n\nSTDERR:\n{}",
+        exit_status, stdout, stderr
+    ))
+}
+
+fn load_files(
+    config: &Config,
+    maximum_context_tokens: usize,
+) -> anyhow::Result<(Vec<(PathBuf, usize)>, usize)> {
+    let mut files_and_tokens = Vec::new();
+    let mut total_tokens = 0;
     let bpe = cl100k_base().unwrap();
 
     let mut include_builder = GlobSetBuilder::new();
@@ -840,7 +987,7 @@ fn make_context(
 
     for entry in WalkDir::new(".") {
         let entry = entry?;
-        let path = entry.path();
+        let path = entry.path().to_path_buf();
 
         if path.is_dir() {
             continue;
@@ -850,7 +997,7 @@ fn make_context(
         let path_str = path_str.strip_prefix("./").unwrap_or(path_str);
 
         if (include_set.is_match(path_str)) && !exclude_set.is_match(path_str) {
-            let file_content = match fs::read_to_string(path) {
+            let file_content = match fs::read_to_string(&path) {
                 Ok(content) => content,
                 Err(e) => {
                     if e.kind() == std::io::ErrorKind::InvalidData {
@@ -874,68 +1021,14 @@ File contents: """
             );
             let file_token_count = bpe.encode_with_special_tokens(&file_context).len();
 
-            if current_token_count + file_token_count <= maximum_context_tokens {
-                content.push_str(&file_context);
-                current_token_count += file_token_count;
-                processed_files.push(ProcessedFile {
-                    name: path_str.to_string(),
-                    token_count: file_token_count,
-                });
+            if total_tokens + file_token_count <= maximum_context_tokens {
+                files_and_tokens.push((path, file_token_count));
+                total_tokens += file_token_count;
             } else {
                 break;
             }
         }
     }
 
-    // Process commands
-    for cmd in &config.commands {
-        let output = execute_command(cmd)?;
-        let command_context = format!(
-            r#"Command: "{}"
-
-Command output: """
-{}"""
-----------
-
-"#,
-            cmd, output
-        );
-        let command_token_count = bpe.encode_with_special_tokens(&command_context).len();
-
-        if current_token_count + command_token_count <= maximum_context_tokens {
-            content.push_str(&command_context);
-            current_token_count += command_token_count;
-            processed_files.push(ProcessedFile {
-                name: format!("Command: {}", cmd),
-                token_count: command_token_count,
-            });
-        } else {
-            break;
-        }
-    }
-
-    let content = content.replace('\n', "\r\n");
-
-    println!(
-        "Success loading context! Token count: {}",
-        current_token_count
-    );
-    Ok((content, processed_files))
-}
-
-fn execute_command(cmd: &str) -> anyhow::Result<String> {
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
-        .output()
-        .with_context(|| format!("Failed to execute command: {}", cmd))?;
-
-    let exit_status = output.status.code().unwrap_or(-1);
-    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-
-    Ok(format!(
-        "Exit Status: {}\n\nSTDOUT:\n{}\n\nSTDERR:\n{}",
-        exit_status, stdout, stderr
-    ))
+    Ok((files_and_tokens, total_tokens))
 }
