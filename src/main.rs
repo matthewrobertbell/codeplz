@@ -47,13 +47,16 @@ impl LLMModel {
         }
     }
 }
+fn default_true()) -> bool {
+    true
+}
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 struct Config {
     include_paths: Vec<String>,
     exclude_paths: Vec<String>,
     commands: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "default_true")]
     use_gitignore: bool,
     system_prompt: Option<String>,
     model: LLMModel,

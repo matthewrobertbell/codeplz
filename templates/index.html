@@ -304,13 +304,10 @@
                             placeholder="e.g., Refactor main function for better performance"></textarea>
                         <div class="d-flex justify-content-end">
                             <button id="submitRequest" class="btn btn-primary">
-                                <i class="fas fa-arrow-right me-2"></i>Generate Code Changes
+                                <span class="button-text"><i class="fas fa-arrow-right me-2"></i>Generate Code
+                                    Changes</span>
                             </button>
                         </div>
-                    </div>
-
-                    <div id="processingSection" class="mt-4 d-none">
-                        <h6 class="text-primary mb-2">AI is working on your code...</h6>
                     </div>
                 </div>
             </div>
@@ -352,7 +349,6 @@
         <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
         <script>
             const userRequestSection = document.getElementById('userRequestSection');
-            const processingSection = document.getElementById('processingSection');
             const resultsSection = document.getElementById('resultsSection');
             const submitButton = document.getElementById('submitRequest');
             const fileList = document.getElementById('fileList');
@@ -374,7 +370,6 @@
             function startProcessing() {
                 const userRequest = document.getElementById('userRequest').value.trim();
                 if (userRequest) {
-                    processingSection.classList.remove('d-none');
                     resultsSection.classList.add('d-none');
                     fileList.innerHTML = '';
                     applyResults.classList.add('d-none');
@@ -388,6 +383,11 @@
                     acceptedChangesCount = 0;
                     applyAcceptedChangesButton.disabled = true;
                     responseData = null;
+
+                    // Change button text and disable button
+                    const buttonText = submitButton.querySelector('.button-text');
+                    buttonText.innerHTML = '<i class="fas fa-cog fa-spin me-2"></i>Generating...';
+                    submitButton.disabled = true;
 
                     sendPromptRequest(userRequest);
                 }
@@ -417,12 +417,16 @@
                     .catch(error => {
                         console.error('Error:', error);
                         alert('An error occurred while processing your request.');
-                        processingSection.classList.add('d-none');
+                    })
+                    .finally(() => {
+                        // Restore button text and enable button
+                        const buttonText = submitButton.querySelector('.button-text');
+                        buttonText.innerHTML = '<i class="fas fa-arrow-right me-2"></i>Generate Code Changes';
+                        submitButton.disabled = false;
                     });
             }
 
             function showResults(responseData) {
-                processingSection.classList.add('d-none');
                 resultsSection.classList.remove('d-none');
 
                 // Display processed files and their token counts
@@ -667,7 +671,6 @@
 
             function resetAll() {
                 userRequestSection.classList.remove('d-none');
-                processingSection.classList.add('d-none');
                 resultsSection.classList.add('d-none');
                 document.getElementById('userRequest').value = '';
                 fileList.innerHTML = '';
