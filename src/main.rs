@@ -260,7 +260,9 @@ async fn select_relevant_files(
         "Given the following list of files and their token counts, and the user's request, \
         select the most relevant files for completing the task. Return only the file paths, \
         one per line, without any additional text or explanation.\n\n\
-        Files:\n{}\n\nUser request: {}\n\nRelevant files:",
+        If there are a lot less than 100,000 tokens in the list, return files that have a chance of being relevant.\
+        If there are a lot more than 100,000 tokens in the list, return only the most relevant files.\
+        \nFiles:\n{}\n\nUser request: {}\n\nRelevant files:",
         file_list, user_prompt
     );
 
