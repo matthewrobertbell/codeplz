@@ -172,10 +172,7 @@ async fn main() -> anyhow::Result<()> {
     let config = match std::fs::read_to_string(config_path) {
         Ok(content) => serde_json::from_str::<Config>(&content)?,
         Err(_) => {
-            let mut default_config = Config::default();
-            default_config
-                .exclude_paths
-                .push("codeplz.json".to_string());
+            let default_config = Config::default();
             let config_json = serde_json::to_string_pretty(&default_config).unwrap();
             std::fs::write(config_path, config_json).context("Failed to create config file")?;
             default_config
@@ -996,7 +993,8 @@ fn load_files(
     }
 
     if config.exclude_paths.is_empty() {
-        exclude_builder.add(Glob::new(".git/*").unwrap());
+        exclude_builder.add(Glob::new(".git/**/*").unwrap());
+        exclude_builder.add(Glob::new("codeplz.json").unwrap());
     }
 
     let include_set = include_builder
