@@ -10,6 +10,7 @@ use aws_sdk_bedrockruntime::{
     types::{ContentBlock, ConversationRole, Message},
     Client as BedrockClient,
 };
+use aws_sdk_sts::Client as StsClient;
 use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::{
@@ -180,6 +181,11 @@ async fn main() -> anyhow::Result<()> {
     };
     println!("Loaded config: {:?}", config);
 
+    // Validate AWS credentials if Bedrock is selected
+    if let LLMModel::Claude35SonnetBedrock = config.model {
+        validate_aws_credentials().await?;
+    }
+
     // Create AppState with the loaded config
     let state = AppState::new(config);
 
@@ -194,6 +200,22 @@ async fn main() -> anyhow::Result<()> {
     println!("Server running on http://127.0.0.1:{}", args.port);
     axum::serve(listener, app).await?;
 
+    Ok(())
+}
+
+async fn validate_aws_credentials() -> anyhow::Result<()> {
+    println!("Validating AWS credentials...");
+    let aws_config = aws_config::load_from_env().await;
+    let sts_client = StsClient::new(&aws_config);
+
+    // Attempt to get the caller identity to validate credentials
+    sts_client
+        .get_caller_identity()
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to validate AWS credentials: {}", e))?;
+
+    println!("AWS credentials validated successfully.");
     Ok(())
 }
 

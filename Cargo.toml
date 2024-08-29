@@ -10,6 +10,7 @@ serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }
 aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 aws-sdk-bedrockruntime = "1.46.0"
+aws-sdk-sts = "1.39.0 "  
 reqwest = { version = "0.12", features = ["json"] }
 globset = "0.4.14"
 walkdir = "2.5.0"
