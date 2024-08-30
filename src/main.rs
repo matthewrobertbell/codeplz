@@ -181,9 +181,10 @@ async fn main() -> anyhow::Result<()> {
     };
     println!("Loaded config: {:?}", config);
 
-    // Validate AWS credentials if Bedrock is selected
-    if let LLMModel::Claude35SonnetBedrock = config.model {
-        validate_aws_credentials().await?;
+    // Validate credentials based on the selected model
+    match config.model {
+        LLMModel::Claude35SonnetBedrock => validate_aws_credentials().await?,
+        LLMModel::OpenAIGPT4o => validate_openai_api_key()?,
     }
 
     // Create AppState with the loaded config
@@ -217,6 +218,19 @@ async fn validate_aws_credentials() -> anyhow::Result<()> {
 
     println!("AWS credentials validated successfully.");
     Ok(())
+}
+
+// Add this new function
+fn validate_openai_api_key() -> anyhow::Result<()> {
+    match std::env::var("OPENAI_API_KEY") {
+        Ok(_) => {
+            println!("OpenAI API key found in environment variables.");
+            Ok(())
+        }
+        Err(_) => {
+            anyhow::bail!("OPENAI_API_KEY environment variable not set. Please set it before running the application with the OpenAI GPT-4 model.")
+        }
+    }
 }
 
 #[derive(Template)]
