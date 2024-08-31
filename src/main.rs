@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use std::cmp::min;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -1011,8 +1012,6 @@ fn load_files(
     config: &Config,
     maximum_context_tokens: usize,
 ) -> anyhow::Result<(Vec<(PathBuf, usize)>, usize)> {
-    let mut files_and_tokens = Vec::new();
-    let mut total_tokens = 0;
     let bpe = cl100k_base().unwrap();
 
     let mut include_builder = GlobSetBuilder::new();
@@ -1043,51 +1042,62 @@ fn load_files(
     let exclude_set = exclude_builder
         .build()
         .map_err(|e| anyhow!("Failed to build exclude globset: {}", e))?;
+    let entries: Vec<_> = WalkDir::new(".")
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .collect();
 
-    for entry in WalkDir::new(".") {
-        let entry = entry?;
-        let path = entry.path().to_path_buf();
-
-        if path.is_dir() {
-            continue;
-        }
-
-        let path_str = path.to_str().ok_or_else(|| anyhow!("Invalid path"))?;
-        let path_str = path_str.strip_prefix("./").unwrap_or(path_str);
-
-        if (include_set.is_match(path_str)) && !exclude_set.is_match(path_str) {
-            let file_content = match fs::read_to_string(&path) {
-                Ok(content) => content,
-                Err(e) => {
-                    if e.kind() == std::io::ErrorKind::InvalidData {
-                        eprintln!("Ignored non-UTF8 file: {path_str}");
-                    } else {
-                        eprintln!("Failed to read file: {path_str}");
-                    }
-                    continue;
-                }
-            };
-
-            let file_context = format!(
-                r#"File name: "{}"
-
-        File contents: """
-        {}"""
-        ----------
-
-        "#,
-                path_str, file_content
-            );
-            let file_token_count = bpe.encode_with_special_tokens(&file_context).len();
-
-            if total_tokens + file_token_count <= maximum_context_tokens {
-                files_and_tokens.push((path, file_token_count));
-                total_tokens += file_token_count;
-            } else {
-                break;
+    let mut files_and_tokens: Vec<_> = entries
+        .par_iter()
+        .filter_map(|entry| {
+            let path = entry.path().to_path_buf();
+            if path.is_dir() {
+                return None;
             }
-        }
-    }
+
+            let path_str = path.to_str()?;
+            let path_str = path_str.strip_prefix("./").unwrap_or(path_str);
+
+            if include_set.is_match(path_str) && !exclude_set.is_match(path_str) {
+                match fs::read_to_string(&path) {
+                    Ok(content) => {
+                        let file_context = format!(
+                            r#"File name: "{}"
+
+File contents: """
+{}
+"""#,
+                            path_str,
+                            content.replace("\n", "\r\n")
+                        );
+                        let file_token_count = bpe.encode_with_special_tokens(&file_context).len();
+
+                        Some((path, file_token_count))
+                    }
+                    Err(e) => {
+                        if e.kind() != std::io::ErrorKind::InvalidData {
+                            eprintln!("Failed to read file: {}", path_str);
+                        }
+                        None
+                    }
+                }
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    files_and_tokens.par_sort_by(|a, b| a.0.cmp(&b.0));
+    let mut cumulative_tokens = 0;
+    let files_and_tokens: Vec<_> = files_and_tokens
+        .into_iter()
+        .take_while(|(_, token_count)| {
+            cumulative_tokens += token_count;
+            cumulative_tokens <= maximum_context_tokens
+        })
+        .collect();
+
+    let total_tokens = files_and_tokens.iter().map(|(_, count)| *count).sum();
 
     Ok((files_and_tokens, total_tokens))
 }
