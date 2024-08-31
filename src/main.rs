@@ -172,7 +172,7 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     let config_path = "codeplz.json";
-    let config = match std::fs::read_to_string(config_path) {
+    let mut config = match std::fs::read_to_string(config_path) {
         Ok(content) => serde_json::from_str::<Config>(&content)?,
         Err(_) => {
             let default_config = Config::default();
@@ -183,13 +183,55 @@ async fn main() -> anyhow::Result<()> {
     };
     println!("Loaded config: {:?}", config);
 
+    if config.exclude_paths.is_empty() {
+        if config
+            .include_paths
+            .iter()
+            .any(|path| path.contains("src/*.rs"))
+        {
+            config.exclude_paths.push("**/target/**".to_string());
+            config.exclude_paths.push("**/Cargo.lock".to_string());
+            println!(
+                "Added Rust-specific exclude paths: {:?}",
+                config.exclude_paths
+            );
+        }
+        if config
+            .include_paths
+            .iter()
+            .any(|path| path.contains("src/*.py"))
+        {
+            config.exclude_paths.push("**/__pycache__/**".to_string());
+            config.exclude_paths.push("**/*.pyc".to_string());
+            println!(
+                "Added Python-specific exclude paths: {:?}",
+                config.exclude_paths
+            );
+        }
+
+        if config
+            .include_paths
+            .iter()
+            .any(|path| path.contains("src/*.js") || path.contains("src/*.ts"))
+        {
+            config.exclude_paths.push("**/node_modules/**".to_string());
+            config
+                .exclude_paths
+                .push("**/package-lock.json".to_string());
+            println!(
+                "Added JavaScript/TypeScript-specific exclude paths: {:?}",
+                config.exclude_paths
+            );
+        }
+    }
+
     // Validate credentials based on the selected model
     match config.model {
         LLMModel::Claude35SonnetBedrock => validate_aws_credentials().await?,
         LLMModel::OpenAIGPT4o => validate_openai_api_key()?,
     }
 
-    // Create AppState with the loaded config
+    // Create AppState with the updated config
     let state = AppState::new(config);
 
     // Update the main function to include the new route
@@ -1076,6 +1118,16 @@ fn load_files(
     if config.exclude_paths.is_empty() {
         exclude_builder.add(Glob::new(".git/**/*").unwrap());
         exclude_builder.add(Glob::new("codeplz.json").unwrap());
+
+        // Check if any include path matches Rust source files
+        if config
+            .include_paths
+            .iter()
+            .any(|path| path.contains("src/*.rs"))
+        {
+            exclude_builder.add(Glob::new("**/target/**").unwrap());
+            exclude_builder.add(Glob::new("**/Cargo.lock").unwrap());
+        }
     }
 
     let include_set = include_builder
