@@ -838,13 +838,14 @@ fn apply_change_to_content(content: &str, change: &Change) -> anyhow::Result<Str
                     .map(String::from)
                     .collect::<Vec<String>>();
 
-                // Remove any lines from insert that match the start of marker_lines
+                // Remove any lines from the end of insert that match the start of marker_lines
                 let overlap = marker_lines
                     .iter()
-                    .zip(insert.iter())
+                    .rev()
+                    .zip(insert.iter().rev())
                     .take_while(|(a, b)| a == b)
                     .count();
-                insert.drain(0..overlap);
+                insert.truncate(insert.len() - overlap);
 
                 new_lines.splice(index..index, insert);
             }
