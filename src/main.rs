@@ -961,6 +961,7 @@ fn find_in_file_lines(file_lines: &[String], needle: &[String]) -> Option<usize>
                 "Best match: {:?}",
                 &file_lines[i..min(i + needle.len(), file_lines.len())]
             );
+            println!("Marker lines: {:?}", needle);
         }
     }
 
