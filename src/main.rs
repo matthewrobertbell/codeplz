@@ -349,7 +349,7 @@ async fn select_relevant_files(
 
     let response = match config.model {
         LLMModel::OpenAIGPT4o => {
-            call_openai_gpt4("You are a helpful assistant.", &pre_prompt).await
+            call_openai_gpt4_mini("You are a helpful assistant.", &pre_prompt).await
         }
         LLMModel::Claude35SonnetBedrock => {
             call_claude_bedrock("You are a helpful assistant.", &pre_prompt).await
@@ -372,6 +372,71 @@ async fn select_relevant_files(
     dbg!(&relevant_files);
 
     Ok(relevant_files)
+}
+
+async fn call_openai_gpt4_mini(
+    system_prompt: &str,
+    full_prompt: &str,
+) -> Result<String, (StatusCode, String)> {
+    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "OPENAI_API_KEY environment variable not set".to_string(),
+        )
+    })?;
+
+    let client = Client::new();
+    let request = OpenAIRequest {
+        model: "gpt-4o-mini".to_string(),
+        messages: vec![
+            OpenAIMessage {
+                role: "system".to_string(),
+                content: system_prompt.to_string(),
+            },
+            OpenAIMessage {
+                role: "user".to_string(),
+                content: full_prompt.to_string(),
+            },
+        ],
+    };
+
+    let response = client
+        .post("https://api.openai.com/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .json(&request)
+        .send()
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to send request to OpenAI API: {}", e),
+            )
+        })?;
+
+    let response_text = response.text().await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to read response from OpenAI API: {}", e),
+        )
+    })?;
+
+    dbg!(&response_text);
+
+    let openai_response: OpenAIResponse = serde_json::from_str(&response_text).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to parse OpenAI API response: {}", e),
+        )
+    })?;
+
+    openai_response
+        .choices
+        .first()
+        .map(|choice| choice.message.content.clone())
+        .ok_or((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "No response from OpenAI API".to_string(),
+        ))
 }
 
 // Modify the prompt function
