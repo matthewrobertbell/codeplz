@@ -66,6 +66,36 @@ struct Config {
     maximum_context_tokens: Option<usize>,
 }
 
+impl Config {
+    fn new() -> anyhow::Result<Self> {
+        let model = determine_model()?;
+        Ok(Config {
+            include_paths: Vec::new(),
+            exclude_paths: Vec::new(),
+            commands: Vec::new(),
+            use_gitignore: true,
+            system_prompt: None,
+            model,
+            maximum_context_tokens: None,
+        })
+    }
+}
+
+fn determine_model() -> anyhow::Result<LLMModel> {
+    if std::env::var("OPENAI_API_KEY").is_ok() {
+        println!("OpenAI API key found. Using OpenAI GPT-4 model.");
+        Ok(LLMModel::OpenAIGPT4o)
+    } else if std::env::var("AWS_PROFILE").is_ok()
+        || (std::env::var("AWS_ACCESS_KEY_ID").is_ok()
+            && std::env::var("AWS_SECRET_ACCESS_KEY").is_ok())
+    {
+        println!("AWS credentials found. Using Claude 3.5 Sonnet (Bedrock) model.");
+        Ok(LLMModel::Claude35SonnetBedrock)
+    } else {
+        anyhow::bail!("No valid API keys found. Please set either OPENAI_API_KEY for OpenAI GPT-4, or AWS_PROFILE, or both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY for Claude 3.5 Sonnet (Bedrock).")
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 struct OpenAIRequest {
     model: String,
@@ -175,7 +205,7 @@ async fn main() -> anyhow::Result<()> {
     let config = match std::fs::read_to_string(config_path) {
         Ok(content) => serde_json::from_str::<Config>(&content)?,
         Err(_) => {
-            let default_config = Config::default();
+            let default_config = Config::new()?;
             let config_json = serde_json::to_string_pretty(&default_config).unwrap();
             std::fs::write(config_path, config_json).context("Failed to create config file")?;
             default_config
