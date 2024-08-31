@@ -332,11 +332,10 @@ async fn select_relevant_files(
         .lines()
         .filter_map(|line| {
             let path = PathBuf::from(line.trim());
-            if files_and_tokens.iter().any(|(p, _)| p == &path) {
-                Some(path)
-            } else {
-                None
-            }
+            files_and_tokens
+                .iter()
+                .find(|(p, _)| p == &path)
+                .map(|(_, _)| path)
         })
         .collect();
 

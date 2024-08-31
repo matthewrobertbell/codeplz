@@ -90,6 +90,8 @@ General points:
 
   - Marker lines should be unique within a file, to allow for an exact match. Bad examples: "{", "}", "".
 
-  - Market lines should not duplicate any lines from insert_lines, as this will cause code in the file to have duplicate lines.
+  - Marker lines should not duplicate any lines from insert_lines, as this will cause code in the file to have duplicate lines.
+
+  - When creating marker lines, make sure to use the updated code that will be in place after previous changes.
 
   - Always output the full code required for a change, don't leave any code creation to the user.
