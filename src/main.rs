@@ -183,48 +183,6 @@ async fn main() -> anyhow::Result<()> {
     };
     println!("Loaded config: {:?}", config);
 
-    if config.exclude_paths.is_empty() {
-        if config
-            .include_paths
-            .iter()
-            .any(|path| path.contains("src/*.rs"))
-        {
-            config.exclude_paths.push("**/target/**".to_string());
-            config.exclude_paths.push("**/Cargo.lock".to_string());
-            println!(
-                "Added Rust-specific exclude paths: {:?}",
-                config.exclude_paths
-            );
-        }
-        if config
-            .include_paths
-            .iter()
-            .any(|path| path.contains("src/*.py"))
-        {
-            config.exclude_paths.push("**/__pycache__/**".to_string());
-            config.exclude_paths.push("**/*.pyc".to_string());
-            println!(
-                "Added Python-specific exclude paths: {:?}",
-                config.exclude_paths
-            );
-        }
-
-        if config
-            .include_paths
-            .iter()
-            .any(|path| path.contains("src/*.js") || path.contains("src/*.ts"))
-        {
-            config.exclude_paths.push("**/node_modules/**".to_string());
-            config
-                .exclude_paths
-                .push("**/package-lock.json".to_string());
-            println!(
-                "Added JavaScript/TypeScript-specific exclude paths: {:?}",
-                config.exclude_paths
-            );
-        }
-    }
-
     // Validate credentials based on the selected model
     match config.model {
         LLMModel::Claude35SonnetBedrock => validate_aws_credentials().await?,
@@ -1118,16 +1076,6 @@ fn load_files(
     if config.exclude_paths.is_empty() {
         exclude_builder.add(Glob::new(".git/**/*").unwrap());
         exclude_builder.add(Glob::new("codeplz.json").unwrap());
-
-        // Check if any include path matches Rust source files
-        if config
-            .include_paths
-            .iter()
-            .any(|path| path.contains("src/*.rs"))
-        {
-            exclude_builder.add(Glob::new("**/target/**").unwrap());
-            exclude_builder.add(Glob::new("**/Cargo.lock").unwrap());
-        }
     }
 
     let include_set = include_builder
@@ -1182,6 +1130,48 @@ File contents: """
         .collect();
 
     files_and_tokens.par_sort_by(|a, b| a.0.cmp(&b.0));
+
+    // Check for language-specific files and add exclude patterns
+    let mut has_rust = false;
+    let mut has_python = false;
+    let mut has_js_ts = false;
+
+    for (path, _) in &files_and_tokens {
+        let path_str = path.to_str().unwrap_or("");
+        if path_str.ends_with(".rs") {
+            has_rust = true;
+        } else if path_str.ends_with(".py") {
+            has_python = true;
+        } else if path_str.ends_with(".js") || path_str.ends_with(".ts") {
+            has_js_ts = true;
+        }
+    }
+
+    if has_rust {
+        exclude_builder.add(Glob::new("**/target/**").unwrap());
+        exclude_builder.add(Glob::new("**/Cargo.lock").unwrap());
+    }
+    if has_python {
+        exclude_builder.add(Glob::new("**/__pycache__/**").unwrap());
+        exclude_builder.add(Glob::new("**/*.pyc").unwrap());
+    }
+    if has_js_ts {
+        exclude_builder.add(Glob::new("**/node_modules/**").unwrap());
+        exclude_builder.add(Glob::new("**/package-lock.json").unwrap());
+    }
+
+    // Rebuild the exclude set with the new patterns
+    let exclude_set = exclude_builder
+        .build()
+        .map_err(|e| anyhow!("Failed to build exclude globset: {}", e))?;
+
+    // Filter files again with the updated exclude set
+    files_and_tokens.retain(|(path, _)| {
+        let path_str = path.to_str().unwrap_or("");
+        let path_str = path_str.strip_prefix("./").unwrap_or(path_str);
+        !exclude_set.is_match(path_str)
+    });
+
     let mut cumulative_tokens = 0;
     let files_and_tokens: Vec<_> = files_and_tokens
         .into_iter()
