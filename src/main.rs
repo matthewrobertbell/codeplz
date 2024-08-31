@@ -810,10 +810,14 @@ fn apply_change_to_content(content: &str, change: &Change) -> anyhow::Result<Str
                     .map(String::from)
                     .collect::<Vec<String>>();
 
-                // Check if marker_lines is one line and matches the first line of insert_lines
-                if marker_lines.len() == 1 && !insert.is_empty() && marker_lines[0] == insert[0] {
-                    insert.remove(0);
-                }
+                // Remove any lines from insert that match the end of marker_lines
+                let overlap = marker_lines
+                    .iter()
+                    .rev()
+                    .zip(insert.iter())
+                    .take_while(|(a, b)| a == b)
+                    .count();
+                insert.drain(0..overlap);
 
                 new_lines.splice(
                     index + marker_lines.len()..index + marker_lines.len(),
@@ -828,10 +832,21 @@ fn apply_change_to_content(content: &str, change: &Change) -> anyhow::Result<Str
             let marker_lines: Vec<String> =
                 marker_lines.lines().into_iter().map(String::from).collect();
             if let Some(index) = find_in_file_lines(&lines, &marker_lines) {
-                new_lines.splice(
-                    index..index,
-                    insert_lines.lines().into_iter().map(String::from),
-                );
+                let mut insert = insert_lines
+                    .lines()
+                    .into_iter()
+                    .map(String::from)
+                    .collect::<Vec<String>>();
+
+                // Remove any lines from insert that match the start of marker_lines
+                let overlap = marker_lines
+                    .iter()
+                    .zip(insert.iter())
+                    .take_while(|(a, b)| a == b)
+                    .count();
+                insert.drain(0..overlap);
+
+                new_lines.splice(index..index, insert);
             }
         }
         LLMCommand::Delete { delete_lines } => {
