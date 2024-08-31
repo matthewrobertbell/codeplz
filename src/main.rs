@@ -629,7 +629,11 @@ fn generate_diff(change: &Change) -> anyhow::Result<String> {
             let old_content = std::fs::read_to_string(file_path)?;
             let new_content = apply_change_to_content(&old_content, change)?;
 
-            let diff = TextDiff::from_lines(&old_content, &new_content);
+            // Trim the last line of both old and new content
+            let old_content_trimmed = old_content.trim_end();
+            let new_content_trimmed = new_content.trim_end();
+
+            let diff = TextDiff::from_lines(old_content_trimmed, new_content_trimmed);
             let mut diff_output = String::new();
             let mut unchanged_lines = Vec::new();
 
