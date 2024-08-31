@@ -3,6 +3,7 @@ use std::cmp::min;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Instant;
 
 use anyhow::{anyhow, bail, Context};
 use askama::Template;
@@ -291,7 +292,6 @@ struct PromptResponse {
     processed_files: Vec<ProcessedFile>,
 }
 
-// Add this new function
 async fn select_relevant_files(
     files_and_tokens: &[(PathBuf, usize)],
     user_prompt: &str,
@@ -350,21 +350,35 @@ async fn prompt(
     State(state): State<AppState>,
     Json(request): Json<PromptRequest>,
 ) -> Result<Json<PromptResponse>, (StatusCode, String)> {
+    let start_time = Instant::now();
+
     let config = &state.config;
     let maximum_context_tokens = config
         .maximum_context_tokens
         .unwrap_or_else(|| config.model.max_tokens());
 
     // Load all files
+    let load_files_start = Instant::now();
     let (files_and_tokens, _) = load_files(config, usize::MAX).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to load files: {}", e),
         )
     })?;
+    let load_files_duration = load_files_start.elapsed();
+    println!(
+        "Load files duration: {} ms",
+        load_files_duration.as_millis()
+    );
 
     // Select relevant files
+    let select_files_start = Instant::now();
     let relevant_files = select_relevant_files(&files_and_tokens, &request.prompt, config).await?;
+    let select_files_duration = select_files_start.elapsed();
+    println!(
+        "Select files duration: {} ms",
+        select_files_duration.as_millis()
+    );
 
     // Filter files_and_tokens to include only relevant files
     let relevant_files_and_tokens: Vec<(PathBuf, usize)> = files_and_tokens
@@ -373,6 +387,7 @@ async fn prompt(
         .collect();
 
     // Generate context using only relevant files
+    let make_context_start = Instant::now();
     let (context, processed_files) =
         make_context(maximum_context_tokens, config, &relevant_files_and_tokens).map_err(|e| {
             (
@@ -380,6 +395,11 @@ async fn prompt(
                 format!("Failed to make context: {}", e),
             )
         })?;
+    let make_context_duration = make_context_start.elapsed();
+    println!(
+        "Make context duration: {} ms",
+        make_context_duration.as_millis()
+    );
 
     // Get the system prompt
     let system_prompt = config
@@ -395,6 +415,7 @@ async fn prompt(
     let input_token_count = bpe.encode_with_special_tokens(&full_prompt).len();
 
     // Call LLM based on the configured model
+    let llm_call_start = Instant::now();
     let llm_response = match config.model {
         LLMModel::OpenAIGPT4o => call_openai_gpt4(&system_prompt, &full_prompt).await?,
         LLMModel::Claude35SonnetBedrock => {
@@ -403,6 +424,8 @@ async fn prompt(
     }
     .replace("```json", "")
     .replace("```", "");
+    let llm_call_duration = llm_call_start.elapsed();
+    println!("LLM call duration: {} ms", llm_call_duration.as_millis());
 
     // Check if the response starts with '{'
     let llm_response = if !llm_response.trim_start().starts_with('{') {
@@ -420,6 +443,7 @@ async fn prompt(
     let output_token_count = bpe.encode_with_special_tokens(&llm_response).len();
 
     // Parse LLM response
+    let parse_response_start = Instant::now();
     let llm_data: LLMResponse = serde_json::from_str(&llm_response).map_err(|e| {
         eprintln!("Error parsing LLM response: {}", e);
         (
@@ -427,8 +451,14 @@ async fn prompt(
             "Error processing request".to_string(),
         )
     })?;
+    let parse_response_duration = parse_response_start.elapsed();
+    println!(
+        "Parse response duration: {} ms",
+        parse_response_duration.as_millis()
+    );
 
     // Generate diffs for each validated change
+    let generate_diffs_start = Instant::now();
     let changes_with_diff = validate_changes(llm_data.changes)
         .into_iter()
         .map(|change| {
@@ -437,6 +467,14 @@ async fn prompt(
             ChangeWithDiff { change, diff }
         })
         .collect::<Vec<ChangeWithDiff>>();
+    let generate_diffs_duration = generate_diffs_start.elapsed();
+    println!(
+        "Generate diffs duration: {} ms",
+        generate_diffs_duration.as_millis()
+    );
+
+    let total_duration = start_time.elapsed();
+    println!("Total duration: {} ms", total_duration.as_millis());
 
     let response = PromptResponse {
         explanation: llm_data.explanation,
