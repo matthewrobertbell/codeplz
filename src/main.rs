@@ -172,7 +172,7 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     let config_path = "codeplz.json";
-    let mut config = match std::fs::read_to_string(config_path) {
+    let config = match std::fs::read_to_string(config_path) {
         Ok(content) => serde_json::from_str::<Config>(&content)?,
         Err(_) => {
             let default_config = Config::default();
@@ -804,9 +804,20 @@ fn apply_change_to_content(content: &str, change: &Change) -> anyhow::Result<Str
             let marker_lines: Vec<String> =
                 marker_lines.lines().into_iter().map(String::from).collect();
             if let Some(index) = find_in_file_lines(&lines, &marker_lines) {
+                let mut insert = insert_lines
+                    .lines()
+                    .into_iter()
+                    .map(String::from)
+                    .collect::<Vec<String>>();
+
+                // Check if marker_lines is one line and matches the first line of insert_lines
+                if marker_lines.len() == 1 && !insert.is_empty() && marker_lines[0] == insert[0] {
+                    insert.remove(0);
+                }
+
                 new_lines.splice(
                     index + marker_lines.len()..index + marker_lines.len(),
-                    insert_lines.lines().into_iter().map(String::from),
+                    insert,
                 );
             }
         }
