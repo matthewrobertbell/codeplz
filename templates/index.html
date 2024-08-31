@@ -631,11 +631,14 @@
                     })
                         .then(response => response.json())
                         .then(data => {
-                            let resultsHtml = data.results.map(result => `
-                                <div class="alert ${result.success ? 'alert-success' : 'alert-danger'} mb-2">
-                                    <strong>${result.filename}:</strong> ${result.message}
-                                </div>
-                            `).join('');
+                            let resultsHtml = data.results.map(result => {
+                                let message = result.success ? getSuccessMessage(result) : result.message;
+                                return `
+                                    <div class="alert ${result.success ? 'alert-success' : 'alert-danger'} mb-2">
+                                        <strong>${result.filename}:</strong> ${message}
+                                    </div>
+                                `;
+                            }).join('');
 
                             const applyResultsContent = document.getElementById('apply-results-content');
                             applyResultsContent.innerHTML = resultsHtml;
@@ -670,6 +673,24 @@
 
                     const applyResults = document.getElementById('apply-results');
                     applyResults.classList.remove('d-none');
+                }
+            }
+
+            function getSuccessMessage(result) {
+                switch (result.change.command) {
+                    case 'INSERT_AFTER':
+                    case 'INSERT_BEFORE':
+                        return `Successfully inserted new code ${result.change.command === 'INSERT_AFTER' ? 'after' : 'before'} line ${result.change.line_number}.`;
+                    case 'DELETE':
+                        return `Successfully deleted code from line ${result.change.start_line} to ${result.change.end_line}.`;
+                    case 'CREATE_FILE':
+                        return `Successfully created new file.`;
+                    case 'RENAME_FILE':
+                        return `Successfully renamed file from ${result.change.old_filename} to ${result.change.new_filename}.`;
+                    case 'DELETE_FILE':
+                        return `Successfully deleted file.`;
+                    default:
+                        return `Successfully applied changes.`;
                 }
             }
 
@@ -725,6 +746,14 @@
             function countLines(diff, prefix) {
                 return diff.split('\n').filter(line => line.startsWith(prefix)).length;
             }
+
+            // Add this function at the end of the script
+            function focusTextarea() {
+                document.getElementById('userRequest').focus();
+            }
+
+            // Call the function when the window loads
+            window.onload = focusTextarea;
         </script>
     </body>
 
