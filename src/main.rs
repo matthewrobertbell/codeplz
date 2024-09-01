@@ -718,6 +718,10 @@ fn generate_diff(change: &Change) -> anyhow::Result<String> {
                 .map(|line| format!("+{}\n", line))
                 .fold(String::new(), |acc, line| acc + &line))
         }
+        LLMCommand::RenameFile { .. } => {
+            // For rename operations, return an empty string as there's no diff to show
+            Ok(String::new())
+        }
         _ => {
             let file_path = &change.filename;
             let old_content = std::fs::read_to_string(file_path)?;

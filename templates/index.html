@@ -496,6 +496,14 @@
                             actionText = 'Change';
                     }
 
+                    let diffButtonHtml = '';
+                    if (change.command !== 'RENAME_FILE') {
+                        diffButtonHtml = `
+                            <button class="btn btn-outline-primary btn-sm mt-2 show-diff-btn">Show Changes</button>
+                            <div class="diff-view d-none"></div>
+                        `;
+                    }
+
                     fileItem.innerHTML = `
                         <div class="card-body">
                             <div class="file-header">
@@ -506,25 +514,33 @@
                             </div>
                             <h6 class="card-subtitle mb-2 ${actionClass}">${actionText}</h6>
                             <p class="card-text"><strong>Reason:</strong> ${change.reason}</p>
-                            <button class="btn btn-outline-primary btn-sm mt-2 show-diff-btn">Show Changes</button>
-                            <div class="diff-view d-none"></div>
+                            ${diffButtonHtml}
                         </div>
                     `;
+
+                    if (change.command === 'RENAME_FILE') {
+                        const newFilenameElement = document.createElement('p');
+                        newFilenameElement.className = 'card-text';
+                        newFilenameElement.innerHTML = `<strong>New filename:</strong> ${change.new_filename}`;
+                        fileItem.querySelector('.card-body').insertBefore(newFilenameElement, fileItem.querySelector('.card-body').lastElementChild);
+                    }
 
                     const showDiffBtn = fileItem.querySelector('.show-diff-btn');
                     const diffView = fileItem.querySelector('.diff-view');
                     const acceptChangeBtn = fileItem.querySelector('.accept-change-btn');
 
-                    showDiffBtn.addEventListener('click', () => {
-                        if (diffView.classList.contains('d-none')) {
-                            diffView.classList.remove('d-none');
-                            showDiffBtn.textContent = 'Hide Changes';
-                            diffView.innerHTML = formatDiff(changeWithDiff.diff);
-                        } else {
-                            diffView.classList.add('d-none');
-                            showDiffBtn.textContent = 'Show Changes';
-                        }
-                    });
+                    if (showDiffBtn) {
+                        showDiffBtn.addEventListener('click', () => {
+                            if (diffView.classList.contains('d-none')) {
+                                diffView.classList.remove('d-none');
+                                showDiffBtn.textContent = 'Hide Changes';
+                                diffView.innerHTML = formatDiff(changeWithDiff.diff);
+                            } else {
+                                diffView.classList.add('d-none');
+                                showDiffBtn.textContent = 'Show Changes';
+                            }
+                        });
+                    }
 
                     acceptChangeBtn.addEventListener('click', (event) => {
                         toggleAcceptChange(event.target);
