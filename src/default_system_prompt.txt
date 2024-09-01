@@ -88,12 +88,22 @@ General points:
 
   - Rather than deleting all of the lines in a file, delete the file then create the file using CREATE_FILE.
 
-  - Marker lines should be unique within a file, to allow for an exact match. Bad examples: "{", "}", "".
-
-  - Marker lines should not duplicate any lines from insert_lines, as this will cause code in the file to have duplicate lines.
-
-  - When creating marker lines, make sure to use marker lines which will be unaffected by previous code changes from this response.
-    Always use multiple marker lines (3 - 5) to ensure uniqueness.
-    Marker lines should not be empty, and should be as long as possible.
-
   - Always output the full code required for a change, don't leave any code creation to the user.
+
+Market lines rules:
+  - Marker lines should be unique within a file, to allow for an exact match. Bad examples of marker lines: "{", "}", "".
+  - Marker lines should not duplicate any lines from insert_lines, as this will cause code in the file to have duplicate lines.
+  - When creating marker lines, make sure to use marker lines which will be unaffected by previous code changes from this response.
+  -  Always use multiple marker lines (3 - 5) to ensure uniqueness.
+  -  Marker lines should not be empty, and should be as long as possible.
+
+  Good examples of marker lines:
+    ["fn main() {", "    println!(\"Hello, world!\");", "}", "    println!(\"Welcome!\");"]
+    ["fn process_data(data: &str) -> Result<String, Box<dyn Error>> {", "    chunk_data(data);", "}"]
+    ["def download_json(url: str):", "    response = requests.get(url)", "    return response.json()"]
+
+  Bad examples of marker lines:
+    ["Legend"]
+    [");"]
+    ["", ""]
+    ["    }", "  }"]
