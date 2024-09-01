@@ -125,7 +125,7 @@ struct LLMResponse {
     conclusion: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 #[serde(untagged)]
 enum LineOrLines {
     Line(String),
@@ -148,7 +148,7 @@ impl LineOrLines {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 #[serde(tag = "command", rename_all = "SCREAMING_SNAKE_CASE")]
 enum LLMCommand {
     InsertAfter {
@@ -784,6 +784,7 @@ struct ChangeResult {
     filename: String,
     success: bool,
     message: String,
+    command: LLMCommand,
 }
 
 async fn apply_changes(Json(request): Json<ApplyChangesRequest>) -> impl IntoResponse {
@@ -807,6 +808,7 @@ fn apply_change(change: &Change) -> ChangeResult {
                         filename: change.filename.to_string_lossy().into_owned(),
                         success: false,
                         message: format!("Failed to create directory: {}", e),
+                        command: change.command.clone(),
                     };
                 }
             }
@@ -815,11 +817,13 @@ fn apply_change(change: &Change) -> ChangeResult {
                     filename: change.filename.to_string_lossy().into_owned(),
                     success: true,
                     message: format!("Created file and inserted {} lines", new_lines.len()),
+                    command: change.command.clone(),
                 },
                 Err(e) => ChangeResult {
                     filename: change.filename.to_string_lossy().into_owned(),
                     success: false,
                     message: format!("Failed to create file: {}", e),
+                    command: change.command.clone(),
                 },
             }
         }
@@ -829,11 +833,13 @@ fn apply_change(change: &Change) -> ChangeResult {
                     filename: change.filename.to_string_lossy().into_owned(),
                     success: true,
                     message: format!("Renamed file to {}", new_filename.to_string_lossy()),
+                    command: change.command.clone(),
                 },
                 Err(e) => ChangeResult {
                     filename: change.filename.to_string_lossy().into_owned(),
                     success: false,
                     message: format!("Failed to rename file: {}", e),
+                    command: change.command.clone(),
                 },
             }
         }
@@ -842,11 +848,13 @@ fn apply_change(change: &Change) -> ChangeResult {
                 filename: change.filename.to_string_lossy().into_owned(),
                 success: true,
                 message: "Deleted file".to_string(),
+                command: change.command.clone(),
             },
             Err(e) => ChangeResult {
                 filename: change.filename.to_string_lossy().into_owned(),
                 success: false,
                 message: format!("Failed to delete file: {}", e),
+                command: change.command.clone(),
             },
         },
         _ => {
@@ -858,23 +866,27 @@ fn apply_change(change: &Change) -> ChangeResult {
                             filename: change.filename.to_string_lossy().into_owned(),
                             success: true,
                             message: "Applied changes successfully".to_string(),
+                            command: change.command.clone(),
                         },
                         Err(e) => ChangeResult {
                             filename: change.filename.to_string_lossy().into_owned(),
                             success: false,
                             message: format!("Failed to write changes: {}", e),
+                            command: change.command.clone(),
                         },
                     },
                     Err(e) => ChangeResult {
                         filename: change.filename.to_string_lossy().into_owned(),
                         success: false,
                         message: format!("Failed to apply changes: {}", e),
+                        command: change.command.clone(),
                     },
                 },
                 Err(e) => ChangeResult {
                     filename: change.filename.to_string_lossy().into_owned(),
                     success: false,
                     message: format!("Failed to read file: {}", e),
+                    command: change.command.clone(),
                 },
             }
         }

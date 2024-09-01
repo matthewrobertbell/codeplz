@@ -467,8 +467,6 @@
                     const fileItem = document.createElement('div');
                     fileItem.className = 'file-item card mb-3';
 
-                    console.log(changeWithDiff);
-
                     const change = changeWithDiff.change || changeWithDiff;
                     let actionClass, actionText;
                     switch (change.command) {
@@ -612,7 +610,6 @@
             }
 
             function applyAcceptedChanges() {
-                console.log(responseData);
                 const changes = Array.from(document.querySelectorAll('.accept-change-btn.btn-success'))
                     .map(button => {
                         const index = parseInt(button.getAttribute('data-file-index'));
@@ -621,7 +618,6 @@
                     .filter(change => change && change.command);
 
                 if (changes.length > 0) {
-                    console.log('Changes to be applied:', changes);
                     fetch('/apply_changes', {
                         method: 'POST',
                         headers: {
@@ -633,6 +629,7 @@
                         .then(data => {
                             let resultsHtml = data.results.map(result => {
                                 let message = result.success ? getSuccessMessage(result) : result.message;
+                                console.log(`Message: ${message}`);
                                 return `
                                     <div class="alert ${result.success ? 'alert-success' : 'alert-danger'} mb-2">
                                         <strong>${result.filename}:</strong> ${message}
@@ -677,16 +674,16 @@
             }
 
             function getSuccessMessage(result) {
-                switch (result.change.command) {
+                switch (result.command.command) {
                     case 'INSERT_AFTER':
                     case 'INSERT_BEFORE':
-                        return `Successfully inserted new code ${result.change.command === 'INSERT_AFTER' ? 'after' : 'before'} line ${result.change.line_number}.`;
+                        return `Successfully inserted new code.`;
                     case 'DELETE':
-                        return `Successfully deleted code from line ${result.change.start_line} to ${result.change.end_line}.`;
+                        return `Successfully deleted code.`;
                     case 'CREATE_FILE':
                         return `Successfully created new file.`;
                     case 'RENAME_FILE':
-                        return `Successfully renamed file from ${result.change.old_filename} to ${result.change.new_filename}.`;
+                        return `Successfully renamed file from ${result.command.filename} to ${result.command.new_filename}.`;
                     case 'DELETE_FILE':
                         return `Successfully deleted file.`;
                     default:
