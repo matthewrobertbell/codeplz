@@ -1295,6 +1295,7 @@ File contents: """
     if has_js_ts {
         exclude_builder.add(Glob::new("**/node_modules/**").unwrap());
         exclude_builder.add(Glob::new("**/package-lock.json").unwrap());
+        exclude_builder.add(Glob::new("**/.next/**").unwrap());
     }
 
     // Rebuild the exclude set with the new patterns
