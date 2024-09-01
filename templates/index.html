@@ -471,9 +471,12 @@
                 // Display token counts
                 tokenCountElement.innerHTML = `
                     ${processedFilesHtml}
-                    <div class="alert alert-info">
-                        <div><strong>Input tokens:</strong> ${responseData.input_token_count}</div>
-                        <div><strong>Output tokens:</strong> ${responseData.output_token_count}</div>
+                    <div class="card bg-neutral-info">
+                        <div class="card-body">
+                            <h6 class="card-title">Token Usage</h6>
+                            <div><strong>Input tokens:</strong> ${responseData.input_token_count}</div>
+                            <div><strong>Output tokens:</strong> ${responseData.output_token_count}</div>
+                        </div>
                     </div>
                 `;
 
