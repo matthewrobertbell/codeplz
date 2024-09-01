@@ -287,26 +287,32 @@
                 justify-content: center;
             }
 
-            .top-buttons {
+            .top-bar {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
                 margin-bottom: 1rem;
+            }
+
+            .top-bar h1 {
+                flex-grow: 1;
+                text-align: center;
+                margin: 0;
             }
         </style>
     </head>
 
     <body class="py-5">
         <div class="container">
-            <div class="top-buttons">
+            <div class="top-bar">
                 <button id="resetButton" class="btn btn-outline-secondary">
                     <i class="fas fa-undo"></i>
                 </button>
+                <h1 class="display-4">CodePlz</h1>
                 <button id="darkModeToggle" class="btn btn-outline-secondary">
                     <i class="fas fa-moon"></i>
                 </button>
             </div>
-            <h1 class="display-4 text-center mb-4">CodePlz</h1>
             <p class="text-center server-path mb-4">
                 <i class="fas fa-folder-open me-2"></i>{{ code_path }}
                 <span class="ms-3"><i class="fas fa-robot me-2"></i>{{ model_name }}</span>
