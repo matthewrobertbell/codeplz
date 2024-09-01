@@ -30,8 +30,7 @@ use walkdir::WalkDir;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Port number to run the server on
-    #[arg(short, long, default_value_t = 3000)]
+    #[arg(short, long, default_value_t = 55555)]
     port: u16,
 }
 
