@@ -92,6 +92,7 @@ General points:
 
   - Marker lines should not duplicate any lines from insert_lines, as this will cause code in the file to have duplicate lines.
 
-  - When creating marker lines, make sure to use marker liens which will be unaffected by previous code changegs from this response.
+  - When creating marker lines, make sure to use marker lines which will be unaffected by previous code changes from this response.
+    Also use multiple marker lines (up to 5) to ensure uniqueness.
 
   - Always output the full code required for a change, don't leave any code creation to the user.
