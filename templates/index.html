@@ -370,28 +370,39 @@
                     toggleChanges();
                 } else if (event.key.toLowerCase() === 'g') {
                     acceptAllChanges();
-                } elseif(event.key.toLowerCase() === 'a')  {
+                } else if (event.key.toLowerCase() === 'a') {
                     applyAcceptedChanges();
                 }
             });
 
             function expandAllChanges() {
-                function toggleChanges() {
-                    document.querySelectorAll('.show-diff-btn').forEach(button => {
-                        button.click();
-                    });
-                }
                 document.querySelectorAll('.show-diff-btn').forEach(button => {
                     if (button.textContent === 'Show Changes') {
                         button.click();
                     }
                 });
             }
+
+            function toggleChanges() {
+                document.querySelectorAll('.show-diff-btn').forEach(button => {
+                    button.click();
+                });
+            }
+
             resetButton.addEventListener('click', resetAll);
             applyAcceptedChangesButton.addEventListener('click', applyAcceptedChanges);
 
             let acceptedChangesCount = 0;
             let responseData = null;
+
+            // Add event listener for Enter key
+            document.getElementById('userRequest').addEventListener('keydown', function (event) {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    this.blur(); // Remove focus from the textarea
+                    startProcessing();
+                }
+            });
 
             function startProcessing() {
                 const userRequest = document.getElementById('userRequest').value.trim();
@@ -418,15 +429,6 @@
                     sendPromptRequest(userRequest);
                 }
             }
-
-            // Add event listeners for keyboard shortcuts
-            // Add event listener for Enter key
-            document.getElementById('userRequest').addEventListener('keydown', function (event) {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    startProcessing();
-                }
-            });
 
             function sendPromptRequest(prompt) {
                 fetch('/prompt', {
