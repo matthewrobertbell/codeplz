@@ -309,6 +309,10 @@
                             </button>
                         </div>
                     </div>
+                    <div class="shortcut-info mt-3">
+                        <p><strong>Keyboard Shortcuts:</strong> Press 'G' to accept all changes. Press 'A' to apply
+                            accepted changes. Press 'X' to toggle changes visibility.</p>
+                    </div>
                 </div>
             </div>
 
@@ -361,6 +365,28 @@
 
             submitButton.addEventListener('click', startProcessing);
             acceptAllChangesButton.addEventListener('click', acceptAllChanges);
+            document.addEventListener('keydown', function (event) {
+                if (event.key.toLowerCase() === 'x') {
+                    toggleChanges();
+                } else if (event.key.toLowerCase() === 'g') {
+                    acceptAllChanges();
+                } elseif(event.key.toLowerCase() === 'a')  {
+                    applyAcceptedChanges();
+                }
+            });
+
+            function expandAllChanges() {
+                function toggleChanges() {
+                    document.querySelectorAll('.show-diff-btn').forEach(button => {
+                        button.click();
+                    });
+                }
+                document.querySelectorAll('.show-diff-btn').forEach(button => {
+                    if (button.textContent === 'Show Changes') {
+                        button.click();
+                    }
+                });
+            }
             resetButton.addEventListener('click', resetAll);
             applyAcceptedChangesButton.addEventListener('click', applyAcceptedChanges);
 
@@ -393,6 +419,7 @@
                 }
             }
 
+            // Add event listeners for keyboard shortcuts
             // Add event listener for Enter key
             document.getElementById('userRequest').addEventListener('keydown', function (event) {
                 if (event.key === 'Enter' && !event.shiftKey) {
@@ -725,27 +752,27 @@
             }
 
             const darkModeToggle = document.getElementById('darkModeToggle');
-if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    document.body.classList.add('dark-mode');
-    darkModeToggle.innerHTML = '<i class="fas fa-sun"></i>';
-    darkModeToggle.classList.add('btn-outline-light');
-    submitButton.classList.add('btn-light');
-} else {
-    darkModeToggle.classList.add('btn-outline-secondary');
-    submitButton.classList.add('btn-primary');
-}
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.body.classList.add('dark-mode');
+                darkModeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+                darkModeToggle.classList.add('btn-outline-light');
+                submitButton.classList.add('btn-light');
+            } else {
+                darkModeToggle.classList.add('btn-outline-secondary');
+                submitButton.classList.add('btn-primary');
+            }
 
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-    if (e.matches) {
-        if (!document.body.classList.contains('dark-mode')) {
-            toggleDarkMode();
-        }
-    } else {
-        if (document.body.classList.contains('dark-mode')) {
-            toggleDarkMode();
-        }
-    }
-});
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+                if (e.matches) {
+                    if (!document.body.classList.contains('dark-mode')) {
+                        toggleDarkMode();
+                    }
+                } else {
+                    if (document.body.classList.contains('dark-mode')) {
+                        toggleDarkMode();
+                    }
+                }
+            });
             darkModeToggle.addEventListener('click', toggleDarkMode);
 
             function toggleDarkMode() {
