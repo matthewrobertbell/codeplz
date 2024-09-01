@@ -307,7 +307,8 @@
                     </div>
                     <div class="shortcut-info mt-3">
                         <p><strong>Keyboard Shortcuts:</strong> Press 'G' to accept all changes. Press 'A' to apply
-                            accepted changes. Press 'X' to toggle changes visibility.</p>
+                            accepted changes. Press 'X' to toggle changes visibility. Press 'F' to focus on the
+                            textarea.</p>
                     </div>
                 </div>
             </div>
@@ -366,6 +367,8 @@
                         acceptAllChanges();
                     } else if (event.key.toLowerCase() === 'a') {
                         applyAcceptedChanges();
+                    } else if (event.key.toLowerCase() === 'f') {
+                        document.getElementById('userRequest').focus();
                     }
                 }
             });
