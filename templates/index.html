@@ -368,6 +368,7 @@
                     } else if (event.key.toLowerCase() === 'a') {
                         applyAcceptedChanges();
                     } else if (event.key.toLowerCase() === 'f') {
+                        event.preventDefault(); // Prevent the 'f' from being added to the textarea
                         document.getElementById('userRequest').focus();
                     }
                 }
