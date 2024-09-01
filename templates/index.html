@@ -725,6 +725,27 @@
             }
 
             const darkModeToggle = document.getElementById('darkModeToggle');
+if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    document.body.classList.add('dark-mode');
+    darkModeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+    darkModeToggle.classList.add('btn-outline-light');
+    submitButton.classList.add('btn-light');
+} else {
+    darkModeToggle.classList.add('btn-outline-secondary');
+    submitButton.classList.add('btn-primary');
+}
+
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+    if (e.matches) {
+        if (!document.body.classList.contains('dark-mode')) {
+            toggleDarkMode();
+        }
+    } else {
+        if (document.body.classList.contains('dark-mode')) {
+            toggleDarkMode();
+        }
+    }
+});
             darkModeToggle.addEventListener('click', toggleDarkMode);
 
             function toggleDarkMode() {
