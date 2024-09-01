@@ -23,7 +23,7 @@ Example:
     "reason": "Add a new function to the file"
   }
 
-"command" should be one of the following:
+"command" should be one of the following (never make up new commands):
    - "INSERT_BEFORE": Insert new lines before the specified marker_lines.
       Additional fields:
       - "marker_lines": The lines of code to insert before. Use as few lines as possible.
