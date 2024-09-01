@@ -96,7 +96,7 @@ Market lines rules:
   - When creating marker lines, make sure to use marker lines which will be unaffected by previous code changes from this response.
     Consider using INSERT_BEFORE instead of INSERT_AFTER, or vice versa, to handle previous code changes.
   - A list of marker lines should always be a direct match for the lines in the file, don't skip any lines.
-  - Always use multiple marker lines (3 - 5) to ensure uniqueness.
+  - Always use between 3 and 5 marker lines to ensure uniqueness.
   - Marker lines should not be empty, and should be as long as possible.
 
   - Good examples of marker lines:
