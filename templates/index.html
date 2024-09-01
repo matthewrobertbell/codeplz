@@ -213,10 +213,6 @@
             }
 
             #darkModeToggle {
-                position: fixed;
-                top: 1rem;
-                right: 1rem;
-                z-index: 1000;
                 border-radius: 50%;
                 width: 40px;
                 height: 40px;
@@ -279,15 +275,37 @@
                 background-color: #2f3e2f;
                 color: #e9ecef;
             }
+
+            #darkModeToggle,
+            #resetButton {
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                padding: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .top-buttons {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 1rem;
+            }
         </style>
     </head>
 
     <body class="py-5">
-        <button id="darkModeToggle" class="btn btn-outline-secondary">
-            <i class="fas fa-moon"></i>
-        </button>
-
         <div class="container">
+            <div class="top-buttons">
+                <button id="resetButton" class="btn btn-outline-secondary">
+                    <i class="fas fa-undo"></i>
+                </button>
+                <button id="darkModeToggle" class="btn btn-outline-secondary">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
             <h1 class="display-4 text-center mb-4">CodePlz</h1>
             <p class="text-center server-path mb-4">
                 <i class="fas fa-folder-open me-2"></i>{{ code_path }}
@@ -344,10 +362,6 @@
                     <!-- Results will be dynamically added here -->
                 </div>
             </div>
-
-            <button id="resetButton" class="btn btn-secondary mt-3">
-                <i class="fas fa-undo me-2"></i>Reset
-            </button>
         </div>
 
         <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
