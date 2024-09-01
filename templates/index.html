@@ -366,12 +366,15 @@
             submitButton.addEventListener('click', startProcessing);
             acceptAllChangesButton.addEventListener('click', acceptAllChanges);
             document.addEventListener('keydown', function (event) {
-                if (event.key.toLowerCase() === 'x') {
-                    toggleChanges();
-                } else if (event.key.toLowerCase() === 'g') {
-                    acceptAllChanges();
-                } else if (event.key.toLowerCase() === 'a') {
-                    applyAcceptedChanges();
+                // Only trigger shortcuts if the textarea is not focused
+                if (document.activeElement !== document.getElementById('userRequest')) {
+                    if (event.key.toLowerCase() === 'x') {
+                        toggleChanges();
+                    } else if (event.key.toLowerCase() === 'g') {
+                        acceptAllChanges();
+                    } else if (event.key.toLowerCase() === 'a') {
+                        applyAcceptedChanges();
+                    }
                 }
             });
 
