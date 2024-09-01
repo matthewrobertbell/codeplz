@@ -1052,7 +1052,7 @@ fn levenshtein_distance(s1: &str, s2: &str) -> usize {
 }
 
 fn find_in_file_lines(file_lines: &[String], needle: &[String]) -> Option<usize> {
-    let needle_joined: Vec<_> = needle
+    let needle_joined = needle
         .iter()
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
