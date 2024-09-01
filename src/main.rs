@@ -1052,17 +1052,17 @@ fn levenshtein_distance(s1: &str, s2: &str) -> usize {
 }
 
 fn find_in_file_lines(file_lines: &[String], needle: &[String]) -> Option<usize> {
-    let non_empty_needle: Vec<_> = needle
+    let needle_joined: Vec<_> = needle
         .iter()
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
-        .collect();
+        .collect::<Vec<_>>()
+        .join("\n");
 
-    if non_empty_needle.is_empty() {
+    if needle_joined.is_empty() {
         return Some(0);
     }
 
-    let needle_joined = non_empty_needle.join("\n");
     let needle_len = needle_joined.chars().count();
     let mut best_match = None;
     let mut min_distance = usize::MAX;
@@ -1071,6 +1071,7 @@ fn find_in_file_lines(file_lines: &[String], needle: &[String]) -> Option<usize>
         let window_joined = window
             .iter()
             .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
             .collect::<Vec<_>>()
             .join("\n");
         let distance = levenshtein_distance(&needle_joined, &window_joined);
