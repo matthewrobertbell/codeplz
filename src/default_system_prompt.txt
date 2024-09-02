@@ -46,6 +46,10 @@ Example:
 General points:
   - Ensure that the JSON is valid and properly formatted.
 
+  - Don't try and create too many changes at once. Let me the user know if there's more to be done.
+
+  - Don't make too many changes to one file, as it increases the risk of errors.
+
   - Don't create files that already exist. Either add to an existing file or create a new file.
 
   - When deleting lines, one command can only cover contiguous lines. Use multiple commands if there are multiple non-contiguous blocks of lines to delete.

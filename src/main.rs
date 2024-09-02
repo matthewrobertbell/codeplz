@@ -60,8 +60,10 @@ struct Config {
     commands: Vec<String>,
     #[serde(default = "default_true")]
     use_gitignore: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     system_prompt: Option<String>,
     model: LLMModel,
+    #[serde(skip_serializing_if = "Option::is_none")]
     maximum_context_tokens: Option<usize>,
 }
 
@@ -552,7 +554,15 @@ async fn prompt(
 
     // Generate diffs for each validated change
     let generate_diffs_start = Instant::now();
-    let changes_with_diff = validate_changes(llm_data.changes)
+
+    if !validate_changes(&llm_data.changes) {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Changes failed validation".to_string(),
+        ));
+    }
+    let changes_with_diff = llm_data
+        .changes
         .into_iter()
         .map(|change| {
             let diff =
@@ -646,17 +656,14 @@ async fn call_openai_gpt4(
         ))
 }
 
-fn validate_changes(changes: Vec<Change>) -> Vec<Change> {
-    changes
-        .into_iter()
-        .filter_map(|change| match validate_change(&change) {
-            Ok(_) => Some(change),
-            Err(e) => {
-                eprintln!("Failed to validate change: {:?}", e);
-                None
-            }
-        })
-        .collect()
+fn validate_changes(changes: &[Change]) -> bool {
+    for change in changes {
+        if let Err(err) = validate_change(change) {
+            eprintln!("Error validating change: {}", err);
+            return false;
+        }
+    }
+    true
 }
 
 fn validate_change(change: &Change) -> anyhow::Result<()> {
