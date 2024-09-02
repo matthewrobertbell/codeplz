@@ -437,14 +437,24 @@
                     },
                     body: JSON.stringify({ prompt: prompt }),
                 })
-                    .then(response => response.json())
+                    .then(response => {
+                        if (!response.ok) {
+                            if (response.status === 500) {
+                                return response.json().then(errorData => {
+                                    throw new Error(errorData.error || 'An unexpected error occurred');
+                                });
+                            }
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
                     .then(data => {
                         responseData = data;
                         showResults(data);
                     })
                     .catch(error => {
                         console.error('Error:', error);
-                        alert('An error occurred while processing your request.');
+                        alert('Error: ' + error.message);
                     })
                     .finally(() => {
                         // Restore button text and enable button
