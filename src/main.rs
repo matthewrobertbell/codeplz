@@ -14,7 +14,6 @@ use aws_sdk_bedrockruntime::{
 };
 use aws_sdk_sts::Client as StsClient;
 use axum::extract::State;
-use axum::response::IntoResponse;
 use axum::{
     routing::{get, post},
     Json, Router,
@@ -124,6 +123,7 @@ struct LLMResponse {
     explanation: String,
     changes: Vec<Change>,
     conclusion: String,
+    suggested_next_prompt: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
@@ -318,6 +318,8 @@ struct PromptResponse {
     explanation: String,
     changes: Vec<ChangeWithDiff>,
     conclusion: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    suggested_next_prompt: Option<String>,
     input_token_count: usize,
     output_token_count: usize,
     processed_files: Vec<ProcessedFile>,
@@ -600,6 +602,9 @@ async fn prompt(
         explanation: llm_data.explanation,
         changes: changes_with_diff,
         conclusion: llm_data.conclusion,
+        suggested_next_prompt: llm_data
+            .suggested_next_prompt
+            .filter(|v| !v.trim().is_empty()),
         input_token_count,
         output_token_count,
         processed_files,
@@ -814,13 +819,8 @@ struct ChangeResult {
     command: LLMCommand,
 }
 
-async fn apply_changes(Json(request): Json<ApplyChangesRequest>) -> impl IntoResponse {
-    let mut results = Vec::new();
-
-    for change in request.changes {
-        let result = apply_change(&change);
-        results.push(result);
-    }
+async fn apply_changes(Json(request): Json<ApplyChangesRequest>) -> Json<ApplyChangesResponse> {
+    let results = request.changes.iter().map(apply_change).collect();
 
     Json(ApplyChangesResponse { results })
 }

@@ -686,13 +686,22 @@
                         .then(data => {
                             let resultsHtml = data.results.map(result => {
                                 let message = result.success ? getSuccessMessage(result) : result.message;
-                                console.log(`Message: ${message}`);
                                 return `
                                     <div class="alert ${result.success ? 'alert-success' : 'alert-danger'} mb-2">
                                         <strong>${result.filename}:</strong> ${message}
                                     </div>
                                 `;
                             }).join('');
+
+                            console.log(data);
+                            if (data.suggested_next_prompt) {
+                                document.getElementById('userRequest').value = data.suggested_next_prompt;
+                                resultsHtml += `
+                                    <div class="alert alert-info mb-2">
+                                        <strong>Suggested Next Prompt:</strong> Suggested next prompt has been loaded.
+                                    </div>
+                                `;
+                            }
 
                             const applyResultsContent = document.getElementById('apply-results-content');
                             applyResultsContent.innerHTML = resultsHtml;
