@@ -327,6 +327,7 @@ async fn select_relevant_files(
     files_and_tokens: &[(PathBuf, usize)],
     user_prompt: &str,
     config: &Config,
+    maximum_context_tokens: usize,
 ) -> Result<Vec<PathBuf>, (StatusCode, String)> {
     let file_list = files_and_tokens
         .iter()
@@ -342,8 +343,9 @@ async fn select_relevant_files(
         "Given the following list of files and their token counts, and the user's request, \
         select the most relevant files for completing the task. Return only the file paths, \
         one per line, without any additional text or explanation.\n\n\
-        If there are a lot less than 100,000 tokens in the list, return files that have a chance of being relevant.\
-        If there are a lot more than 100,000 tokens in the list, return only the most relevant files.\
+        If there are a lot less than 80,000 tokens in the list, return files that have a chance of being relevant.\
+        If there are a lot more than 80,000 tokens in the list, return only the most relevant files.\
+        Output the most relevant files first.\
         \nFiles:\n{}\n\nUser request: {}\n\nRelevant files:",
         file_list, user_prompt
     );
@@ -359,6 +361,8 @@ async fn select_relevant_files(
 
     dbg!(&response);
 
+    let mut current_context_tokens_count = 0;
+
     let relevant_files = response
         .lines()
         .filter_map(|line| {
@@ -366,7 +370,14 @@ async fn select_relevant_files(
             files_and_tokens
                 .iter()
                 .find(|(p, _)| p == &path)
-                .map(|(_, _)| path)
+                .and_then(|(_, tokens_count)| {
+                    if current_context_tokens_count + tokens_count < maximum_context_tokens {
+                        current_context_tokens_count += tokens_count;
+                        Some(path)
+                    } else {
+                        None
+                    }
+                })
         })
         .collect();
 
@@ -468,7 +479,13 @@ async fn prompt(
 
     // Select relevant files
     let select_files_start = Instant::now();
-    let relevant_files = select_relevant_files(&files_and_tokens, &request.prompt, config).await?;
+    let relevant_files = select_relevant_files(
+        &files_and_tokens,
+        &request.prompt,
+        config,
+        maximum_context_tokens,
+    )
+    .await?;
     let select_files_duration = select_files_start.elapsed();
     println!(
         "Select files duration: {} ms",

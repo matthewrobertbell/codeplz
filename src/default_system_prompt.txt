@@ -5,6 +5,7 @@ Produce a JSON object with the following fields:
    - "changes": An array of JSON objects, each representing a single change. 
      It's ok if the changes array is empty, just explain why.
    - "conclusion": A concise summary / conclusion, maximum 100 words.
+   - "suggested_next_prompt": "If there's more to do for this task, a high quality prompt, max 200 words, that will instruct this system to work towards completing the task (don't suggest running commands)"
 
 Each object in the changes array represents a single change and should have the following structure:
    {
@@ -48,8 +49,8 @@ General points:
 
   - Don't try and create too many changes at once. Let me the user know if there's more to be done.
 
-  - Don't make too many changes to one file, as it increases the risk of errors.
-
+  - Don't make too many changes to one file, as it increases the risk of errors. 
+  
   - Don't create files that already exist. Either add to an existing file or create a new file.
 
   - When deleting lines, one command can only cover contiguous lines. Use multiple commands if there are multiple non-contiguous blocks of lines to delete.
