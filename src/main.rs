@@ -38,16 +38,26 @@ enum LLMModel {
     #[default]
     OpenAIGPT4o,
     Claude35SonnetBedrock,
+    OpenAIO1Preview,
+    OpenAIO1Mini,
 }
 
 impl LLMModel {
     fn max_tokens(&self) -> usize {
         match self {
-            LLMModel::OpenAIGPT4o => 100_000,
+            LLMModel::OpenAIGPT4o | LLMModel::OpenAIO1Preview | LLMModel::OpenAIO1Mini => 100_000,
             LLMModel::Claude35SonnetBedrock => 180_000,
         }
     }
+
+    fn supports_system_prompt(&self) -> bool {
+        match self {
+            LLMModel::OpenAIGPT4o | LLMModel::Claude35SonnetBedrock => true,
+            LLMModel::OpenAIO1Preview | LLMModel::OpenAIO1Mini => false,
+        }
+    }
 }
+
 fn default_true() -> bool {
     true
 }
@@ -92,7 +102,7 @@ fn determine_model() -> anyhow::Result<LLMModel> {
         println!("AWS credentials found. Using Claude 3.5 Sonnet (Bedrock) model.");
         Ok(LLMModel::Claude35SonnetBedrock)
     } else {
-        anyhow::bail!("No valid API keys found. Please set either OPENAI_API_KEY for OpenAI GPT-4, or AWS_PROFILE, or both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY for Claude 3.5 Sonnet (Bedrock).")
+        anyhow::bail!("No valid API keys found. Please set either OPENAI_API_KEY for OpenAI models, or AWS_PROFILE, or both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY for Claude 3.5 Sonnet (Bedrock).")
     }
 }
 
@@ -217,7 +227,9 @@ async fn main() -> anyhow::Result<()> {
     // Validate credentials based on the selected model
     match config.model {
         LLMModel::Claude35SonnetBedrock => validate_aws_credentials().await?,
-        LLMModel::OpenAIGPT4o => validate_openai_api_key()?,
+        LLMModel::OpenAIGPT4o | LLMModel::OpenAIO1Preview | LLMModel::OpenAIO1Mini => {
+            validate_openai_api_key()?
+        }
     }
 
     // Create AppState with the updated config
@@ -290,8 +302,10 @@ async fn index(State(state): State<AppState>) -> IndexTemplate {
         .unwrap_or("Unknown")
         .to_string();
     let model_name = match state.config.model {
-        LLMModel::OpenAIGPT4o => "OpenAI GPT-4",
+        LLMModel::OpenAIGPT4o => "OpenAI GPT-4o",
         LLMModel::Claude35SonnetBedrock => "Claude 3.5 Sonnet (Bedrock)",
+        LLMModel::OpenAIO1Preview => "OpenAI o1-Preview",
+        LLMModel::OpenAIO1Mini => "OpenAI o1-Mini",
     }
     .to_string();
     IndexTemplate {
@@ -353,7 +367,7 @@ async fn select_relevant_files(
     );
 
     let response = match config.model {
-        LLMModel::OpenAIGPT4o => {
+        LLMModel::OpenAIGPT4o | LLMModel::OpenAIO1Preview | LLMModel::OpenAIO1Mini => {
             call_openai_gpt4_mini("You are a helpful assistant.", &pre_prompt).await
         }
         LLMModel::Claude35SonnetBedrock => {
@@ -412,6 +426,63 @@ async fn call_openai_gpt4_mini(
                 content: full_prompt.to_string(),
             },
         ],
+    };
+
+    let response = client
+        .post("https://api.openai.com/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .json(&request)
+        .send()
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to send request to OpenAI API: {}", e),
+            )
+        })?;
+
+    let response_text = response.text().await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to read response from OpenAI API: {}", e),
+        )
+    })?;
+
+    dbg!(&response_text);
+
+    let openai_response: OpenAIResponse = serde_json::from_str(&response_text).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to parse OpenAI API response: {}", e),
+        )
+    })?;
+
+    openai_response
+        .choices
+        .first()
+        .map(|choice| choice.message.content.clone())
+        .ok_or((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "No response from OpenAI API".to_string(),
+        ))
+}
+
+// Add this new function to support o1-preview and o1-mini models
+async fn call_openai_o1(model: &str, full_prompt: &str) -> Result<String, (StatusCode, String)> {
+    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "OPENAI_API_KEY environment variable not set".to_string(),
+        )
+    })?;
+
+    let client = Client::new();
+    let request = OpenAIRequest {
+        model: model.to_string(),
+        messages: vec![OpenAIMessage {
+            role: "user".to_string(),
+            content: full_prompt.to_string(),
+        }],
     };
 
     let response = client
@@ -522,7 +593,14 @@ async fn prompt(
         .unwrap_or_else(|| include_str!("default_system_prompt.txt").to_string());
 
     // Combine system prompt, context, and user prompt
-    let full_prompt = format!("{}\n\nUser request: {}", context, request.prompt);
+    let full_prompt = if config.model.supports_system_prompt() {
+        format!("{}\n\nUser request: {}", context, request.prompt)
+    } else {
+        format!(
+            "{}\n\n{}\n\nUser request: {}",
+            system_prompt, context, request.prompt
+        )
+    };
 
     // Calculate input token count
     let bpe = cl100k_base().unwrap();
@@ -535,6 +613,8 @@ async fn prompt(
         LLMModel::Claude35SonnetBedrock => {
             call_claude_bedrock(&system_prompt, &full_prompt).await?
         }
+        LLMModel::OpenAIO1Preview => call_openai_o1("o1-preview", &full_prompt).await?,
+        LLMModel::OpenAIO1Mini => call_openai_o1("o1-mini", &full_prompt).await?,
     }
     .replace("```json", "")
     .replace("```", "");
